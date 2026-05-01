@@ -1,0 +1,22 @@
+{
+  "entities": {
+    "WebsiteConfig": {
+      "title": "Website Configuration",
+      "description": "Global configuration for the website including subject list",
+      "type": "object",
+      "properties": {
+        "subjects": {
+          "type": "array",
+          "description": "List of subjects available on the site"
+        }
+      },
+      "required": ["subjects"]
+    }
+  },
+  "firestore": {
+    "settings/config": {
+      "schema": "WebsiteConfig",
+      "description": "Global website settings"
+    }
+  }
+}
