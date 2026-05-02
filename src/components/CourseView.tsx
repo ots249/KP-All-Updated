@@ -165,7 +165,7 @@ const CourseItem: React.FC<{
                 </div>
                 
                 <div className="flex-1 min-w-0">
-                    <div className="text-[15px] font-bold text-text line-clamp-1">
+                    <div className="text-[15px] font-bold text-slate-800 dark:text-slate-200 leading-snug break-words">
                         {item.title}
                     </div>
                     {isPDF && (
@@ -535,7 +535,7 @@ const CourseView: React.FC<Props> = ({ data, subject, subjects, syncing, onRetry
                                             <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all ${isExpanded ? 'bg-indigo-600 text-white rotate-90 shadow-lg shadow-indigo-100' : 'bg-slate-100 dark:bg-slate-800 text-indigo-600'}`}>
                                                 <ChevronRight size={20} />
                                             </div>
-                                            <h3 className="font-bold text-[16px] text-text leading-tight group-hover:text-indigo-600 transition-colors line-clamp-2">
+                                            <h3 className="font-bold text-[16px] text-slate-800 dark:text-slate-200 leading-snug group-hover:text-indigo-600 transition-colors break-words">
                                                 {section.title}
                                             </h3>
                                         </div>
