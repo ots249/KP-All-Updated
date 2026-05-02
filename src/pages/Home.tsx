@@ -197,37 +197,36 @@ const Home: React.FC = () => {
                                 initial={{ opacity: 0, y: -20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95 }}
-                                className="bg-gradient-to-r from-indigo-600 to-violet-600 rounded-[2rem] p-5 md:p-8 lg:p-12 text-white relative overflow-hidden shadow-xl shadow-indigo-500/20"
+                                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 md:px-8 md:py-6 text-slate-800 dark:text-white relative overflow-hidden shadow-xl shadow-slate-200/50 dark:shadow-none"
                             >
-                                <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-                                <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-32 h-32 bg-indigo-400/20 rounded-full blur-2xl pointer-events-none" />
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl pointer-events-none" />
 
                                 <button 
                                     onClick={() => {
                                         setIsPromptDismissed(true);
                                         AppStorage.set('pwa_prompt_dismissed', true);
                                     }}
-                                    className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
+                                    className="absolute top-4 right-4 text-slate-400 hover:text-indigo-600 transition-colors p-1"
                                     aria-label="Dismiss prompt"
                                 >
-                                    <X size={20} />
+                                    <X size={18} />
                                 </button>
 
-                                <div className="relative flex flex-col md:flex-row items-center gap-6 lg:gap-10">
-                                    <div className="w-16 h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0 text-white">
-                                        <Sparkles size={32} className="text-amber-300 lg:w-12 lg:h-12" />
+                                <div className="relative flex flex-col md:flex-row items-center gap-5">
+                                    <div className="w-12 h-12 md:w-14 md:h-14 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center shrink-0 text-indigo-600">
+                                        <Download size={24} />
                                     </div>
-                                    <div className="flex-1 text-center md:text-left space-y-2 lg:space-y-4">
-                                        <h3 className="text-xl md:text-2xl lg:text-4xl font-black">প্লে-স্টোর অ্যাপের মতো ব্যবহার করুন!</h3>
-                                        <p className="text-white/80 font-medium text-sm md:text-base lg:text-lg">
-                                            সহজে এবং দ্রুত অ্যাক্সেস করতে আপনার ফোনে অ্যাপটি ইন্সটল করে নিন।
+                                    <div className="flex-1 text-center md:text-left space-y-1">
+                                        <h3 className="text-lg md:text-xl font-black">আমাদের অ্যাপটি ব্যবহার করুন</h3>
+                                        <p className="text-slate-500 dark:text-slate-400 font-medium text-xs md:text-sm">
+                                            সহজ এবং দ্রুত অ্যাক্সেস পেতে আপনার ডিভাইসের হোম স্ক্রিনে অ্যাপটি যুক্ত করুন।
                                         </p>
                                     </div>
                                     <button 
                                         onClick={install}
-                                        className="bg-white text-indigo-600 px-8 py-3 md:py-4 lg:px-12 lg:text-lg rounded-xl font-bold flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-black/10"
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-indigo-500/20"
                                     >
-                                        <Download size={20} /> ইন্সটল করুন
+                                        ইন্সটল করুন
                                     </button>
                                 </div>
                             </motion.div>
