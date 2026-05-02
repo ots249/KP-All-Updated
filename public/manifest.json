@@ -1,0 +1,21 @@
+{
+  "name": "কারিগরি পাঠশালা",
+  "short_name": "কারিগরি",
+  "description": "সহজে এবং দ্রুত শিখুন মোবাইল অ্যাপের মাধ্যমে",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "https://i.postimg.cc/6pw4D0fF/kp-logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://i.postimg.cc/6pw4D0fF/kp-logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

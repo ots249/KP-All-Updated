@@ -69,7 +69,7 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error })
 
     const getIcon = (item: CourseContent) => {
         const title = item.title.toLowerCase();
-        const link = (item.link || item.resource?.link || '').toLowerCase();
+        const link = resolveLink(item).toLowerCase();
         
         if (item.type === 'pdf' || title.includes('pdf') || link.includes('.pdf')) return <FileText size={18} className="text-[#F40F02]" />;
         if (title.includes('doc') || link.includes('.doc') || link.includes('.docx')) return <FileText size={18} className="text-[#2B579A]" />;
@@ -80,7 +80,7 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error })
     };
 
     const handleItemClick = (item: CourseContent) => {
-        const link = item.link || item.resource?.link || item.resource?.resourceable?.link;
+        const link = resolveLink(item);
         if (!link) return;
 
         const title = item.title.toLowerCase();

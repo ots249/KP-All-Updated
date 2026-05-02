@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ExternalLink, Download, Play, Maximize2, FileText } from 'lucide-react';
+import { X, ExternalLink, Download, Play, Maximize2, FileText, Loader2, Youtube } from 'lucide-react';
 import ReactPlayer from 'react-player';
+import { extractYouTubeVideoId } from '../lib/youtube';
 
 interface Props {
   url: string;
@@ -11,36 +12,42 @@ interface Props {
 }
 
 const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [isReady, setIsReady] = useState(false);
+
+  // Hardware Back Button Support
+  useEffect(() => {
+    window.history.pushState({ isMediaViewerOpen: true }, '');
+    const handlePopState = () => onClose();
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (window.history.state?.isMediaViewerOpen) {
+        window.history.back();
+      }
+    };
+  }, [onClose]);
+
+  // Loading Timeout - if it takes too long, just show the player
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isLoading) {
+        setIsLoading(false);
+        setIsReady(true);
+      }
+    }, 8000); // reduced to 8 seconds
+    return () => clearTimeout(timer);
+  }, [isLoading]);
+  
   // Fix for ReactPlayer in some ESM environments
   const Player = (ReactPlayer as any).default || ReactPlayer;
 
-  // Helper to get YouTube embed URL if it's a YouTube link
-  const getYouTubeEmbedUrl = (videoUrl: string) => {
-    try {
-      let videoId = '';
-      if (videoUrl.includes('youtu.be/')) {
-        videoId = videoUrl.split('youtu.be/')[1].split(/[?#]/)[0];
-      } else if (videoUrl.includes('youtube.com/watch')) {
-        const urlObj = new URL(videoUrl);
-        videoId = urlObj.searchParams.get('v') || '';
-      } else if (videoUrl.includes('youtube.com/embed/')) {
-        videoId = videoUrl.split('embed/')[1].split(/[?#]/)[0];
-      } else if (videoUrl.includes('youtube.com/shorts/')) {
-        videoId = videoUrl.split('shorts/')[1].split(/[?#]/)[0];
-      }
-      
-      return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0` : null;
-    } catch (e) {
-      console.error('Error parsing YouTube URL:', e);
-      return null;
-    }
-  };
-
-  const youtubeEmbedUrl = type === 'video' ? getYouTubeEmbedUrl(url) : null;
+  const youtubeId = type === 'video' ? extractYouTubeVideoId(url) : null;
+  const youtubeEmbedUrl = youtubeId ? `https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}` : null;
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 md:p-4">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 md:p-4 font-sans">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -54,7 +61,7 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 30 }}
           className={`relative w-full max-w-6xl h-full md:h-auto md:max-h-[90vh] ${
-            type === 'video' ? 'aspect-video bg-black' : 'aspect-[4/5] md:aspect-auto md:h-[90vh] bg-[#f1f5f9]'
+            type === 'video' ? 'aspect-video bg-black shadow-rose-500/10' : 'aspect-[4/5] md:aspect-auto md:h-[90vh] bg-[#f1f5f9]'
           } md:rounded-[2rem] overflow-hidden shadow-2xl flex flex-col z-10`}
         >
           {/* Header/Toolbar */}
@@ -66,11 +73,11 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
             <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
               {type === 'video' ? (
                 <div className="text-[#FF0000] shrink-0">
-                  <Play size={24} className="fill-current" />
+                  <Youtube size={28} className="fill-current" />
                 </div>
               ) : (
                 <div className="text-rose-500 shrink-0">
-                  <FileText size={24} />
+                  <FileText size={28} />
                 </div>
               )}
               <h3 className={`font-bold text-sm md:text-lg truncate max-w-xs md:max-w-md ${
@@ -86,9 +93,9 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
                     href={url} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="bg-[#FF0000] hover:bg-[#cc0000] text-white px-3 py-1.5 md:px-6 md:py-2.5 rounded-full text-xs md:text-sm font-bold flex items-center gap-2 transition-all hover:scale-105"
+                    className="bg-[#FF0000] hover:bg-[#cc0000] text-white px-3 py-1.5 md:px-5 md:py-2 rounded-full text-[10px] md:text-sm font-bold flex items-center gap-2 transition-all hover:scale-105 shadow-lg shadow-red-600/20"
                   >
-                    <ExternalLink size={16} />
+                    <Youtube size={16} />
                     <span className="hidden sm:inline">ইউটিউবে দেখুন</span>
                   </a>
                ) : type === 'pdf' ? (
@@ -105,27 +112,56 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
               
               <button 
                 onClick={onClose}
-                className={`w-9 h-9 md:w-11 md:h-11 rounded-full flex items-center justify-center transition-all hover:rotate-90 ${
+                className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all hover:rotate-90 ${
                   type === 'video' 
-                    ? 'bg-white/10 hover:bg-white/20 text-white border border-white/10' 
+                    ? 'bg-white/5 hover:bg-white/15 text-white border border-white/10' 
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200'
                 }`}
+                title="বন্ধ করুন (Esc)"
               >
                 <X size={20} />
               </button>
             </div>
           </div>
 
-          <div className="flex-1 w-full h-full flex items-center justify-center relative overflow-hidden">
+          <div className="flex-1 w-full h-full flex items-center justify-center relative overflow-hidden bg-black/20">
+            {/* Loading Indicator */}
+            <AnimatePresence>
+              {isLoading && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-[5] flex flex-col items-center justify-center bg-slate-900/40 backdrop-blur-sm"
+                >
+                  <div className="relative">
+                    <Loader2 size={48} className="text-white animate-spin opacity-20" />
+                    <Loader2 size={48} className="text-indigo-500 animate-spin absolute top-0 left-0 [animation-duration:1.5s]" />
+                  </div>
+                  <motion.p 
+                    initial={{ y: 5, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    className="mt-4 text-white/70 text-sm font-bold tracking-widest uppercase"
+                  >
+                    লোডিং হচ্ছে...
+                  </motion.p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {type === 'video' ? (
               <div className="w-full h-full relative group">
                 {youtubeEmbedUrl ? (
-                  <iframe
+                   <iframe
                     src={youtubeEmbedUrl}
                     className="w-full h-full"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
                     frameBorder="0"
+                    onLoad={() => {
+                      setIsLoading(false);
+                      setIsReady(true);
+                    }}
                   />
                 ) : (
                   <Player
@@ -133,9 +169,20 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
                     width="100%"
                     height="100%"
                     controls
-                    playing
-                    pip
+                    playing={true}
                     className="react-player"
+                    onReady={() => {
+                      setIsReady(true);
+                      setIsLoading(false);
+                    }}
+                    onStart={() => {
+                      setIsLoading(false);
+                    }}
+                    onError={(e: any) => {
+                      console.error('Player Error:', e);
+                      setIsLoading(false);
+                      setIsReady(true); 
+                    }}
                   />
                 )}
               </div>
@@ -145,6 +192,10 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
                   src={`https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`}
                   className="w-full h-full"
                   frameBorder="0"
+                  onLoad={() => {
+                    setIsLoading(false);
+                    setIsReady(true);
+                  }}
                 />
               </div>
             ) : (
