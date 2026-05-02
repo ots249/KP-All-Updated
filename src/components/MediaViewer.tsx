@@ -14,8 +14,7 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isReady, setIsReady] = useState(false);
   
-  // Custom Video States
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(0.8);
   const [muted, setMuted] = useState(false);
   const [played, setPlayed] = useState(0);
@@ -25,6 +24,12 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
   
   const playerRef = React.useRef<any>(null);
   const controlsTimeoutRef = React.useRef<any>(null);
+
+  // Initialize playing state after mount to avoid interruption errors on fast unmounts
+  useEffect(() => {
+    setPlaying(true);
+    return () => setPlaying(false);
+  }, []);
 
   // Hardware Back Button Support
   useEffect(() => {
@@ -39,7 +44,6 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
     };
   }, [onClose]);
 
-  // Loading Timeout - if it takes too long, just show the player
   // Handle Controls Visibility
   const handleMouseMove = () => {
     setShowControls(true);
@@ -64,11 +68,17 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
   const handleProgress = (state: { played: number }) => {
     if (!seeking) {
       setPlayed(state.played);
+      // Fallback for duration if onDuration doesn't fire correctly in some environments
+      if (duration === 0 && playerRef.current) {
+        const d = playerRef.current.getDuration();
+        if (d) setDuration(d);
+      }
     }
   };
   const handleDuration = (dur: number) => setDuration(dur);
 
   const formatTime = (seconds: number) => {
+    if (!seconds || isNaN(seconds)) return '0:00';
     const date = new Date(seconds * 1000);
     const hh = date.getUTCHours();
     const mm = date.getUTCMinutes();
@@ -97,7 +107,7 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 30 }}
           className={`relative w-full max-w-6xl h-full md:h-auto md:max-h-[90vh] ${
-            type === 'video' ? 'aspect-video bg-black shadow-rose-500/10' : 'aspect-[4/5] md:aspect-auto md:h-[90vh] bg-[#f1f5f9]'
+            type === 'video' ? 'aspect-video bg-black' : 'aspect-[4/5] md:aspect-auto md:h-[90vh] bg-[#f1f5f9]'
           } md:rounded-[2rem] overflow-hidden shadow-2xl flex flex-col z-10`}
         >
           {/* Header/Toolbar */}
@@ -203,10 +213,14 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
                   volume={volume}
                   muted={muted}
                   onProgress={handleProgress}
-                  onDuration={handleDuration}
                   onReady={() => {
                     setIsReady(true);
                     setIsLoading(false);
+                    // Explicitly set duration on ready
+                    if (playerRef.current) {
+                      const d = playerRef.current.getDuration();
+                      if (d) setDuration(d);
+                    }
                   }}
                   onStart={() => {
                     setIsLoading(false);
@@ -233,6 +247,7 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
                 <AnimatePresence>
                   {showControls && isReady && (
                     <motion.div 
+                      key="controls"
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
