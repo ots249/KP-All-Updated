@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence, motionValue, useTransform } from 'motion/react';
+import { motion, AnimatePresence, motionValue, useTransform, animate } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { API, AppStorage } from '../lib/api';
 import { WebsiteConfig, Subject, CourseData, CourseSection, CourseContent } from '../types';
@@ -78,8 +78,38 @@ const CourseItem: React.FC<{
     onToggleFavorite: () => void;
     onClick: () => void;
     getIcon: (item: CourseContent) => React.ReactNode;
-}> = ({ item, cIdx, isDone, isFavorite, isPDF, isYouTube, link, onToggleComplete, onToggleFavorite, onClick, getIcon }) => {
+    searchTerm: string;
+    isOffline?: boolean;
+}> = ({ item, cIdx, isDone, isFavorite, isPDF, isYouTube, link, onToggleComplete, onToggleFavorite, onClick, getIcon, searchTerm, isOffline }) => {
     const x = motionValue(0);
+
+    const highlightText = (text: string, query: string) => {
+        if (!query.trim()) return text;
+        const regex = new RegExp(`(${query})`, 'gi');
+        const parts = text.split(regex);
+        return parts.map((part, i) => 
+            regex.test(part) ? (
+                <mark key={i} className="bg-amber-200 dark:bg-amber-500/40 text-amber-900 dark:text-white rounded px-0.5">
+                    {part}
+                </mark>
+            ) : part
+        );
+    };
+
+    const handleDownload = (e: React.MouseEvent, url: string, title: string) => {
+        e.stopPropagation();
+        if (isOffline) {
+            alert('You are currently offline. The file will be available for download once you are back online.');
+            return;
+        }
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${title}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
     
     // Smooth visual feedback transforms
     const favoriteOpacity = useTransform(x, [0, 60], [0, 1]);
@@ -138,6 +168,7 @@ const CourseItem: React.FC<{
                     } else if (info.offset.x < -threshold) {
                         onToggleComplete();
                     }
+                    animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
                 }}
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -167,7 +198,7 @@ const CourseItem: React.FC<{
                 
                 <div className="flex-1 min-w-0">
                     <div className="text-[15px] font-bold text-slate-800 dark:text-slate-200 leading-snug break-words">
-                        {item.title}
+                        {highlightText(item.title, searchTerm)}
                         {isItemNew(item.available_from || item.resource?.resourceable?.start_time) && (
                             <span className="ml-2 px-1.5 py-0.5 bg-indigo-600 text-white text-[8px] font-black uppercase rounded-md inline-block align-middle transform -translate-y-0.5">
                                 NEW
@@ -175,14 +206,23 @@ const CourseItem: React.FC<{
                         )}
                     </div>
                     {isPDF && (
-                        <motion.div 
-                            animate={{ opacity: [1, 0.5, 1] }}
-                            transition={{ duration: 2, repeat: Infinity }}
-                            className="flex items-center gap-1 mt-0.5 text-[#10b981] text-[9px] font-black uppercase tracking-tighter"
-                        >
-                            <Cloud size={10} fill="currentColor" className="opacity-50" />
-                            <span>Offline Available</span>
-                        </motion.div>
+                        <div className="flex items-center gap-3 mt-1.5">
+                            <motion.div 
+                                animate={{ opacity: [1, 0.5, 1] }}
+                                transition={{ duration: 2, repeat: Infinity }}
+                                className="flex items-center gap-1 text-[#10b981] text-[9px] font-black uppercase tracking-tighter"
+                            >
+                                <Cloud size={10} fill="currentColor" className="opacity-50" />
+                                <span>Offline Available</span>
+                            </motion.div>
+                            <button 
+                                onClick={(e) => handleDownload(e, link || '', item.title)}
+                                className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-slate-600 dark:text-slate-400 hover:text-indigo-600 rounded-md text-[9px] font-black uppercase transition-colors"
+                            >
+                                <Cloud size={10} />
+                                Download
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -214,6 +254,19 @@ const CourseView: React.FC<Props> = ({ data, subject, subjects, syncing, onRetry
         AppStorage.get<Record<string, boolean>>(`favoritesItems_${subject.apiUrl}`) || {}
     );
     const [activeMedia, setActiveMedia] = useState<{ url: string, type: 'video' | 'pdf' | 'other', title: string } | null>(null);
+
+    const highlightText = (text: string, query: string) => {
+        if (!query.trim()) return text;
+        const regex = new RegExp(`(${query})`, 'gi');
+        const parts = text.split(regex);
+        return parts.map((part, i) => 
+            regex.test(part) ? (
+                <mark key={i} className="bg-amber-200 dark:bg-amber-500/40 text-amber-900 dark:text-white rounded px-0.5">
+                    {part}
+                </mark>
+            ) : part
+        );
+    };
 
     const [liveContent, setLiveContent] = useState<LiveDetails | null>(() => checkLiveContent(data.sections));
 
@@ -564,7 +617,7 @@ const CourseView: React.FC<Props> = ({ data, subject, subjects, syncing, onRetry
                                                 <ChevronRight size={20} />
                                             </div>
                                             <h3 className="font-bold text-[16px] text-slate-800 dark:text-slate-200 leading-snug group-hover:text-indigo-600 transition-colors break-words">
-                                                {section.title}
+                                                {highlightText(section.title, searchTerm)}
                                             </h3>
                                         </div>
                                         <div className="flex items-center gap-4 ml-4">
@@ -608,6 +661,8 @@ const CourseView: React.FC<Props> = ({ data, subject, subjects, syncing, onRetry
                                                                     isPDF={isPDF}
                                                                     isYouTube={isYouTube}
                                                                     link={link}
+                                                                    searchTerm={searchTerm}
+                                                                    isOffline={isOffline}
                                                                     onToggleComplete={() => toggleComplete(item.id, { stopPropagation: () => {} } as any)}
                                                                     onToggleFavorite={() => toggleFavorite(item.id, { stopPropagation: () => {} } as any)}
                                                                     onClick={() => handleItemClick(item)}
