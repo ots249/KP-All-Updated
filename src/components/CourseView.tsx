@@ -45,8 +45,10 @@ const resolveLink = (item: CourseContent): string => {
 interface Props {
   data: CourseData;
   subject: Subject;
+  subjects: Subject[];
   syncing: boolean;
   onRetry: () => void;
+  onSubjectChange: (slug: string) => void;
   error: string | null;
   isOffline?: boolean;
 }
@@ -77,34 +79,57 @@ const CourseItem: React.FC<{
     getIcon: (item: CourseContent) => React.ReactNode;
 }> = ({ item, cIdx, isDone, isFavorite, isPDF, isYouTube, link, onToggleComplete, onToggleFavorite, onClick, getIcon }) => {
     const x = motionValue(0);
-    const favoriteOpacity = useTransform(x, [0, 50], [0, 1]);
-    const completeOpacity = useTransform(x, [0, -50], [0, 1]);
+    
+    // Smooth visual feedback transforms
+    const favoriteOpacity = useTransform(x, [0, 60], [0, 1]);
+    const favoriteScale = useTransform(x, [0, 100], [0.8, 1.2]);
+    const favoriteTranslate = useTransform(x, [0, 100], [-20, 0]);
+    
+    const completeOpacity = useTransform(x, [0, -60], [0, 1]);
+    const completeScale = useTransform(x, [0, -100], [0.8, 1.2]);
+    const completeTranslate = useTransform(x, [0, -100], [20, 0]);
+
+    const itemRotate = useTransform(x, [-100, 100], [-2, 2]);
+    const itemScale = useTransform(x, [-100, 0, 100], [0.98, 1, 0.98]);
 
     return (
-        <div className="relative overflow-hidden rounded-2xl group/swipe">
+        <div className="relative overflow-hidden rounded-2xl group/swipe bg-slate-100 dark:bg-slate-900/50">
             {/* Swipe Background Layer */}
-            <div className="absolute inset-0 flex items-center justify-between px-6 pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-between px-8 pointer-events-none">
                 <motion.div 
-                    style={{ opacity: favoriteOpacity }}
-                    className="flex items-center gap-2 text-amber-500 font-black text-[10px] uppercase tracking-wider"
+                    style={{ 
+                        opacity: favoriteOpacity, 
+                        scale: favoriteScale,
+                        x: favoriteTranslate
+                    }}
+                    className="flex flex-col items-center gap-1 text-amber-500"
                 >
-                    <Star size={18} fill="currentColor" />
-                    <span>Favorite</span>
+                    <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center shadow-lg shadow-amber-200/20">
+                        <Star size={24} fill="currentColor" />
+                    </div>
+                    <span className="font-black text-[9px] uppercase tracking-tighter">Favorite</span>
                 </motion.div>
+                
                 <motion.div 
-                    style={{ opacity: completeOpacity }}
-                    className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-wider"
+                    style={{ 
+                        opacity: completeOpacity, 
+                        scale: completeScale,
+                        x: completeTranslate
+                    }}
+                    className="flex flex-col items-center gap-1 text-indigo-600"
                 >
-                    <span>Complete</span>
-                    <CheckCircle2 size={18} />
+                    <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center shadow-lg shadow-indigo-200/20">
+                        <CheckCircle2 size={24} />
+                    </div>
+                    <span className="font-black text-[9px] uppercase tracking-tighter">Complete</span>
                 </motion.div>
             </div>
 
             <motion.div 
                 drag="x"
-                style={{ x }}
+                style={{ x, rotate: itemRotate, scale: itemScale }}
                 dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0.15}
+                dragElastic={0.2}
                 onDragEnd={(_, info) => {
                     const threshold = 100;
                     if (info.offset.x > threshold) {
@@ -116,10 +141,13 @@ const CourseItem: React.FC<{
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: cIdx * 0.04, duration: 0.3 }}
-                onClick={onClick}
+                onClick={(e) => {
+                    // Only click if we didn't drag much
+                    if (Math.abs(x.get()) < 5) onClick();
+                }}
                 className={`p-4 rounded-2xl border border-border transition-all flex items-center gap-4 cursor-pointer shadow-sm group active:scale-[0.98] relative z-10 ${
                     isDone 
-                    ? 'bg-slate-50/50 dark:bg-slate-900/50 opacity-60' 
+                    ? 'bg-slate-50/50 dark:bg-white/5 opacity-60' 
                     : 'bg-card-bg hover:bg-white dark:hover:bg-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900/40 hover:shadow-md'
                 }`}
             >
@@ -169,7 +197,7 @@ const CourseItem: React.FC<{
     );
 };
 
-const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, isOffline }) => {
+const CourseView: React.FC<Props> = ({ data, subject, subjects, syncing, onRetry, onSubjectChange, error, isOffline }) => {
     const [activeSectionId, setActiveSectionId] = useState<string | number | null>(data.sections[0]?.id || 2026);
     const [searchTerm, setSearchTerm] = useState('');
     const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
@@ -180,6 +208,21 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
         AppStorage.get<Record<string, boolean>>(`favoritesItems_${subject.apiUrl}`) || {}
     );
     const [activeMedia, setActiveMedia] = useState<{ url: string, type: 'video' | 'pdf' | 'other', title: string } | null>(null);
+
+    const handleSubjectSwipe = (direction: 'next' | 'prev') => {
+        if (!subjects.length) return;
+        const currentIndex = subjects.findIndex(s => s.id === subject.id);
+        if (currentIndex === -1) return;
+
+        let nextIndex;
+        if (direction === 'next') {
+            nextIndex = (currentIndex + 1) % subjects.length;
+        } else {
+            nextIndex = (currentIndex - 1 + subjects.length) % subjects.length;
+        }
+        
+        onSubjectChange(subjects[nextIndex].slug);
+    };
 
     // Filtered sections and contents based on search and favorites
     const filteredSections = useMemo(() => {
@@ -299,62 +342,102 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
         setClickCount(prev => prev + 1);
     };
 
+    const bannerX = motionValue(0);
+    const nextLabelOpacity = useTransform(bannerX, [0, -100], [0, 1]);
+    const prevLabelOpacity = useTransform(bannerX, [0, 100], [0, 1]);
+    const bannerRotate = useTransform(bannerX, [-200, 200], [-3, 3]);
+    const bannerScale = useTransform(bannerX, [-200, 0, 200], [0.95, 1, 0.95]);
+
     return (
         <div className="flex-1 flex flex-col bg-bg transition-colors duration-300">
             <div className="relative p-4 lg:p-0 lg:mb-10">
-                <div className="flex flex-col lg:flex-row gap-6 lg:gap-10 items-stretch">
-                    <div className="lg:w-1/2 aspect-[16/9] lg:aspect-auto bg-slate-200 dark:bg-slate-800 rounded-[2rem] overflow-hidden shadow-lg relative group">
-                        {data.image?.link && (
-                            <img 
-                                src={data.image.link} 
-                                alt="Course Banner" 
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                                loading="lazy"
-                            />
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                        {syncing && (
-                            <div className="absolute top-4 left-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 text-[10px] text-white font-bold uppercase tracking-widest">
-                                <RefreshCw size={10} className="animate-spin" />
-                                Syncing
-                            </div>
-                        )}
-                        {isOffline && (
-                            <div className="absolute top-4 right-4 bg-amber-500/90 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 text-[10px] text-white font-bold uppercase tracking-widest shadow-lg">
-                                <WifiOff size={10} />
-                                Offline Mode
-                            </div>
-                        )}
+                <motion.div 
+                    drag="x"
+                    style={{ x: bannerX, rotate: bannerRotate, scale: bannerScale }}
+                    dragConstraints={{ left: 0, right: 0 }}
+                    dragElastic={0.2}
+                    onDragEnd={(_, info) => {
+                        const threshold = 100;
+                        if (info.offset.x > threshold) {
+                            handleSubjectSwipe('prev');
+                        } else if (info.offset.x < -threshold) {
+                            handleSubjectSwipe('next');
+                        }
+                    }}
+                    className="relative cursor-grab active:cursor-grabbing touch-none z-20"
+                >
+                    {/* Banner Swipe Indicators */}
+                    <div className="absolute inset-0 pointer-events-none flex items-center justify-between px-10 z-30">
+                        <motion.div 
+                            style={{ opacity: prevLabelOpacity }}
+                            className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-full shadow-2xl flex items-center gap-2 -translate-x-12"
+                        >
+                            <ChevronRight size={20} className="rotate-180 text-indigo-600" />
+                            <span className="font-black text-xs uppercase tracking-wider text-slate-800 dark:text-white">Previous Subject</span>
+                        </motion.div>
+                        <motion.div 
+                            style={{ opacity: nextLabelOpacity }}
+                            className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-full shadow-2xl flex items-center gap-2 translate-x-12"
+                        >
+                            <span className="font-black text-xs uppercase tracking-wider text-slate-800 dark:text-white">Next Subject</span>
+                            <ChevronRight size={20} text-indigo-600 />
+                        </motion.div>
                     </div>
 
-                    <div className="lg:w-1/2 flex flex-col justify-center px-4 lg:px-0">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 w-fit">
-                            {data.subtitle || 'ডিপ্লোমা ইন ইঞ্জিনিয়ারিং'}
+                    <div className="flex flex-col lg:flex-row gap-6 lg:gap-10 items-stretch select-none">
+                        <div className="lg:w-1/2 aspect-[16/9] lg:aspect-auto bg-slate-200 dark:bg-slate-800 rounded-[2rem] overflow-hidden shadow-lg relative group">
+                            {data.image?.link && (
+                                <img 
+                                    src={data.image.link} 
+                                    alt="Course Banner" 
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                                    loading="lazy"
+                                />
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                            {syncing && (
+                                <div className="absolute top-4 left-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 text-[10px] text-white font-bold uppercase tracking-widest">
+                                    <RefreshCw size={10} className="animate-spin" />
+                                    Syncing
+                                </div>
+                            )}
+                            {isOffline && (
+                                <div className="absolute top-4 right-4 bg-amber-500/90 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 text-[10px] text-white font-bold uppercase tracking-widest shadow-lg">
+                                    <WifiOff size={10} />
+                                    Offline Mode
+                                </div>
+                            )}
                         </div>
-                        <h1 
-                            onClick={handleSecretClick}
-                            className="text-2xl md:text-3xl lg:text-5xl font-black text-slate-800 dark:text-white leading-tight mb-4 select-none cursor-default active:scale-[0.98] transition-all"
-                        >
-                            {data.title}
-                        </h1>
-                        <p className="text-slate-500 dark:text-slate-400 font-medium text-sm md:text-base lg:text-lg max-w-xl">
-                            আপনার শেখার যাত্রাকে আরও সহজ এবং আনন্দদায়ক করতে আমরা নিয়ে এসেছি সেরা সব রিসোর্স। নিয়মিত প্র্যাকটিস করুন এবং আপনার লক্ষ্য পূরণ করুন।
-                        </p>
-                        
-                        <div className="mt-8 flex items-center gap-6">
-                            <div className="flex -space-x-3">
-                                {[1, 2, 3].map(i => (
-                                    <div key={i} className="w-10 h-10 rounded-full border-4 border-white dark:border-slate-900 bg-slate-200 overflow-hidden">
-                                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${i + 123}`} alt="User" />
-                                    </div>
-                                ))}
+
+                        <div className="lg:w-1/2 flex flex-col justify-center px-4 lg:px-0">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 w-fit">
+                                {data.subtitle || 'ডিপ্লোমা ইন ইঞ্জিনিয়ারিং'}
                             </div>
-                            <p className="text-xs font-bold text-slate-400 tracking-wide uppercase">
-                                <span className="text-indigo-600 dark:text-indigo-400">12k+</span> Students Learning
+                            <h1 
+                                onClick={(e) => { e.stopPropagation(); handleSecretClick(); }}
+                                className="text-2xl md:text-3xl lg:text-5xl font-black text-slate-800 dark:text-white leading-tight mb-4 pointer-events-auto cursor-pointer active:scale-[0.98] transition-all"
+                            >
+                                {data.title}
+                            </h1>
+                            <p className="text-slate-500 dark:text-slate-400 font-medium text-sm md:text-base lg:text-lg max-w-xl">
+                                আপনার শেখার যাত্রাকে আরও সহজ এবং আনন্দদায়ক করতে আমরা নিয়ে এসেছি সেরা সব রিসোর্স। নিয়মিত প্র্যাকটিস করুন এবং আপনার লক্ষ্য পূরণ করুন।
                             </p>
+                            
+                            <div className="mt-8 flex items-center gap-6">
+                                <div className="flex -space-x-3">
+                                    {[1, 2, 3].map(i => (
+                                        <div key={i} className="w-10 h-10 rounded-full border-4 border-white dark:border-slate-900 bg-slate-200 overflow-hidden">
+                                            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${i + 123}`} alt="User" />
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-xs font-bold text-slate-400 tracking-wide uppercase">
+                                    <span className="text-indigo-600 dark:text-indigo-400">12k+</span> Students Learning
+                                </p>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </motion.div>
             </div>
 
             <div className="px-4 py-2 flex gap-3">

@@ -8,19 +8,38 @@ import InstallPage from './pages/InstallPage';
 import { AppStorage } from './lib/api';
 
 const App: React.FC = () => {
-    const [theme, setTheme] = useState<'light' | 'dark'>(() => AppStorage.get<'light' | 'dark'>('theme') || 'light');
+    const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+        const saved = AppStorage.get<'light' | 'dark'>('theme');
+        if (saved) return saved;
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    });
     const [isStandalone, setIsStandalone] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
 
     useEffect(() => {
         setIsStandalone(window.matchMedia('(display-mode: standalone)').matches);
+        
+        // Listen for system theme changes
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        const handleChange = (e: MediaQueryListEvent) => {
+            // Only auto-change if no preference is saved or if we want to follow system
+            const saved = AppStorage.get('theme');
+            if (!saved) {
+                setTheme(e.matches ? 'dark' : 'light');
+            }
+        };
+
+        mediaQuery.addEventListener('change', handleChange);
+        
         if (theme === 'dark') {
             document.documentElement.classList.add('dark');
         } else {
             document.documentElement.classList.remove('dark');
         }
         AppStorage.set('theme', theme);
+
+        return () => mediaQuery.removeEventListener('change', handleChange);
     }, [theme]);
 
     const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');

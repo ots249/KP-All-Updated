@@ -306,16 +306,19 @@ const Home: React.FC = () => {
                 <div className="flex-1 max-w-6xl mx-auto w-full lg:px-10 lg:py-8 pb-20">
                     {activeSubject && courseData ? (
                         <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            transition={{ duration: 0.5 }}
+                            key={activeSubject.id}
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            transition={{ duration: 0.3 }}
                         >
                             <CourseView 
                                 data={courseData} 
                                 subject={activeSubject} 
+                                subjects={config?.subjects || []}
                                 syncing={syncing}
                                 onRetry={() => fetchFreshData(activeSubject)}
+                                onSubjectChange={(slug) => navigate(`/?subject=${slug}`)}
                                 error={error}
                                 isOffline={isOffline}
                             />
