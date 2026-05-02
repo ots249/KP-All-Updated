@@ -1,13 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sun, Moon, RotateCcw, Lock, BookOpen, RefreshCw, Smartphone } from 'lucide-react';
-import Home from './pages/Home';
-import Admin from './pages/Admin';
-import InstallPage from './pages/InstallPage';
+import { Sun, Moon, RefreshCw, AlertCircle } from 'lucide-react';
+import { Helmet } from 'react-helmet-async';
 import SplashScreen from './components/SplashScreen';
 import TutorialOverlay from './components/TutorialOverlay';
+import ErrorBoundary from './components/ErrorBoundary';
 import { AppStorage } from './lib/api';
+
+// Lazy load pages for better performance
+const Home = lazy(() => import('./pages/Home'));
+const Admin = lazy(() => import('./pages/Admin'));
+const InstallPage = lazy(() => import('./pages/InstallPage'));
+
+const PageLoader = () => (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <motion.div 
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            className="text-indigo-600"
+        >
+            <RefreshCw size={40} />
+        </motion.div>
+    </div>
+);
 
 const App: React.FC = () => {
     const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -15,29 +31,21 @@ const App: React.FC = () => {
         if (saved) return saved;
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     });
-    const [isStandalone, setIsStandalone] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [showTutorial, setShowTutorial] = useState(false);
-    const navigate = useNavigate();
     const location = useLocation();
 
     useEffect(() => {
-        setIsStandalone(window.matchMedia('(display-mode: standalone)').matches);
-        
-        // Initial loading timer
         const timer = setTimeout(() => {
             setIsLoading(false);
-            // After loading, check if tutorial is needed
             const tutorialCompleted = AppStorage.get<boolean>('tutorial_completed');
             if (!tutorialCompleted) {
                 setShowTutorial(true);
             }
-        }, 2800); // Allow splash animation to play
+        }, 2800);
         
-        // Listen for system theme changes
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
         const handleChange = (e: MediaQueryListEvent) => {
-            // Only auto-change if no preference is saved or if we want to follow system
             const saved = AppStorage.get('theme');
             if (!saved) {
                 setTheme(e.matches ? 'dark' : 'light');
@@ -63,6 +71,15 @@ const App: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-bg text-text transition-colors duration-500">
+            <Helmet>
+                <title>Master Class | Education Reinvented</title>
+                <meta name="description" content="ডিপ্লোমা ইন ইঞ্জিনিয়ারিং শিক্ষার্থীদের পড়াশোনাকে আরও সহজ এবং আনন্দদায়ক করার জন্য তৈরি একটি আধুনিক লার্নিং প্ল্যাটফর্ম।" />
+                <meta property="og:title" content="Master Class | Diploma Education Platform" />
+                <meta property="og:description" content="Learn anywhere, anytime with interactive lectures and offline support." />
+                <meta property="og:type" content="website" />
+                <meta name="theme-color" content={theme === 'dark' ? '#0f172a' : '#ffffff'} />
+            </Helmet>
+
             <AnimatePresence>
                 {isLoading && <SplashScreen key="splash" />}
             </AnimatePresence>
@@ -71,13 +88,17 @@ const App: React.FC = () => {
                 {showTutorial && <TutorialOverlay key="tutorial" onClose={() => setShowTutorial(false)} />}
             </AnimatePresence>
 
-            <AnimatePresence mode="wait">
-                <Routes location={location} key={location.pathname}>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/admin" element={<Admin />} />
-                    <Route path="/app" element={<InstallPage />} />
-                </Routes>
-            </AnimatePresence>
+            <ErrorBoundary>
+                <Suspense fallback={<PageLoader />}>
+                    <AnimatePresence mode="wait">
+                        <Routes location={location} key={location.pathname}>
+                            <Route path="/" element={<Home />} />
+                            <Route path="/admin" element={<Admin />} />
+                            <Route path="/app" element={<InstallPage />} />
+                        </Routes>
+                    </AnimatePresence>
+                </Suspense>
+            </ErrorBoundary>
 
             {location.pathname !== '/admin' && location.pathname !== '/app' && (
                 <div className="fixed bottom-6 left-6 z-50 flex items-center gap-4">

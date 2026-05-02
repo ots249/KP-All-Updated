@@ -103,12 +103,19 @@ const CourseItem: React.FC<{
             return;
         }
         
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${title}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const linkElem = document.createElement('a');
+        linkElem.href = url;
+        linkElem.download = `${title}.pdf`;
+        document.body.appendChild(linkElem);
+        linkElem.click();
+        document.body.removeChild(linkElem);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onClick();
+        }
     };
     
     // Smooth visual feedback transforms
@@ -126,7 +133,7 @@ const CourseItem: React.FC<{
     return (
         <div className="relative overflow-hidden rounded-2xl group/swipe bg-slate-100 dark:bg-slate-900/50">
             {/* Swipe Background Layer */}
-            <div className="absolute inset-0 flex items-center justify-between px-8 pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-between px-8 pointer-events-none" aria-hidden="true">
                 <motion.div 
                     style={{ 
                         opacity: favoriteOpacity, 
@@ -174,25 +181,30 @@ const CourseItem: React.FC<{
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: cIdx * 0.04, duration: 0.3 }}
                 onClick={(e) => {
-                    // Only click if we didn't drag much
                     if (Math.abs(x.get()) < 5) onClick();
                 }}
-                className={`p-4 rounded-2xl border border-border transition-all flex items-center gap-4 cursor-pointer shadow-sm group active:scale-[0.98] relative z-10 ${
+                onKeyDown={handleKeyDown}
+                tabIndex={0}
+                role="button"
+                aria-pressed={isDone}
+                aria-label={`${item.title}, ${isDone ? 'completed' : 'uncompleted'}`}
+                className={`p-4 rounded-2xl border border-border transition-all flex items-center gap-4 cursor-pointer shadow-sm group active:scale-[0.98] outline-none focus:ring-2 focus:ring-indigo-600 relative z-10 ${
                     isDone 
                     ? 'bg-slate-50/50 dark:bg-white/5 opacity-60' 
                     : 'bg-card-bg hover:bg-white dark:hover:bg-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900/40 hover:shadow-md'
                 }`}
             >
-                <div 
+                <button 
                     onClick={(e) => { e.stopPropagation(); onToggleComplete(); }}
+                    aria-label={isDone ? "Mark as incomplete" : "Mark as complete"}
                     className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all group-hover:scale-110 ${
                         isDone ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-600'
                     }`}
                 >
                     {isDone && <CheckCircle2 size={16} className="text-white" />}
-                </div>
+                </button>
                 
-                <div className="shrink-0 scale-110">
+                <div className="shrink-0 scale-110" aria-hidden="true">
                     {getIcon(item)}
                 </div>
                 
@@ -217,6 +229,7 @@ const CourseItem: React.FC<{
                             </motion.div>
                             <button 
                                 onClick={(e) => handleDownload(e, link || '', item.title)}
+                                aria-label={`Download PDF: ${item.title}`}
                                 className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-slate-600 dark:text-slate-400 hover:text-indigo-600 rounded-md text-[9px] font-black uppercase transition-colors"
                             >
                                 <Cloud size={10} />
@@ -232,6 +245,7 @@ const CourseItem: React.FC<{
 
                 <button 
                     onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+                    aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
                     className={`p-2 transition-all hover:scale-110 active:scale-95 ${
                         isFavorite ? 'text-amber-500' : 'text-slate-300 dark:text-slate-700 hover:text-amber-300'
                     }`}

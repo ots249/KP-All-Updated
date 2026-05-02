@@ -1,23 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
-import { Subject, WebsiteConfig, CourseData } from '../types';
-import { API, AppStorage } from '../lib/api';
-import { BookOpen, AlertCircle, RefreshCw, Lock, Download, Sparkles, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Subject, CourseData } from '../types';
+import { AppStorage } from '../lib/api';
+import { BookOpen, AlertCircle, Lock, Download, Sparkles, X, RefreshCw } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { AnimatePresence } from 'motion/react';
 import CourseView from '../components/CourseView';
 import SubjectSelector from '../components/SubjectSelector';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import { useConfig, useCourseData } from '../hooks/useCourseQueries';
 
 const Home: React.FC = () => {
-    const [config, setConfig] = useState<WebsiteConfig | null>(AppStorage.get<WebsiteConfig>('website_config'));
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    
+    // React Query Hooks
+    const { data: config, isLoading: isConfigLoading, refetch: refetchConfig } = useConfig();
     const [activeSubject, setActiveSubject] = useState<Subject | null>(null);
-    const [courseData, setCourseData] = useState<CourseData | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [syncing, setSyncing] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const { data: courseData, isFetching: isDataSyncing, error: dataError, refetch: refetchCourse } = useCourseData(activeSubject?.apiUrl);
+
     const [showStickyHeader, setShowStickyHeader] = useState(false);
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
     const { canInstall, install } = usePWAInstall();
@@ -27,10 +27,8 @@ const Home: React.FC = () => {
     useEffect(() => {
         const handleOnline = () => setIsOffline(false);
         const handleOffline = () => setIsOffline(true);
-
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
-
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
@@ -39,60 +37,16 @@ const Home: React.FC = () => {
 
     // Scroll listener for sticky header
     useEffect(() => {
-        const handleScroll = () => {
-            if (window.scrollY > 200) {
-                setShowStickyHeader(true);
-            } else {
-                setShowStickyHeader(false);
-            }
-        };
-
+        const handleScroll = () => setShowStickyHeader(window.scrollY > 200);
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
-
-    // Initial load - Cache First then Refresh
-    useEffect(() => {
-        // 1. Try to load from cache immediately
-        const cachedConfig = AppStorage.get<WebsiteConfig>('website_config');
-        if (cachedConfig) {
-            setConfig(cachedConfig);
-            setLoading(false);
-        }
-        
-        // 2. Refresh from network
-        loadConfig();
-        
-        // 3. Listen for real-time updates
-        const unsubConfig = API.onConfigUpdate((freshConfig) => {
-            setConfig(freshConfig);
-            AppStorage.set('website_config', freshConfig);
-            setLoading(false);
-        });
-
-        return () => {
-            if (unsubConfig) unsubConfig();
-        };
-    }, []);
-
-    const loadConfig = async () => {
-        try {
-            const freshConfig = await API.fetchConfig();
-            setConfig(freshConfig);
-            AppStorage.set('website_config', freshConfig);
-        } catch (err) {
-            console.warn('Network fetch failed, using cache if available');
-        } finally {
-            setLoading(false);
-        }
-    };
 
     // Determine active subject from URL or config
     useEffect(() => {
         if (!config || !config.subjects?.length) return;
         
         const slug = searchParams.get('subject');
-        
         let subject = config.subjects.find(s => s.slug === slug);
         if (!subject && config.defaultSubjectId) {
             subject = config.subjects.find(s => s.id === config.defaultSubjectId);
@@ -102,40 +56,11 @@ const Home: React.FC = () => {
         setActiveSubject(subject);
     }, [config, searchParams]);
 
-    // Cache-First fetching for course data
-    useEffect(() => {
-        if (!activeSubject) return;
-
-        const dataKey = `courseDataCache_${activeSubject.apiUrl}`;
-        const cached = AppStorage.get<CourseData>(dataKey);
-        if (cached) {
-            setCourseData(cached);
-        }
-
-        fetchFreshData(activeSubject);
-    }, [activeSubject]);
-
-    const fetchFreshData = async (subject: Subject) => {
-        setSyncing(true);
-        setError(null);
-        try {
-            const freshData = await API.fetchCourseData(subject.apiUrl);
-            setCourseData(freshData);
-            AppStorage.set(`courseDataCache_${subject.apiUrl}`, freshData);
-        } catch (err) {
-            if (!courseData) {
-                setError(`${subject.name} লোড করতে সমস্যা হয়েছে`);
-            }
-        } finally {
-            setSyncing(false);
-        }
-    };
-
-    if (loading && !config) {
+    if (isConfigLoading && !config) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
-                <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-text-light">লোডিং হচ্ছে...</p>
+            <div className="flex flex-col items-center justify-center min-h-screen space-y-4" aria-live="polite">
+                <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">লোডিং হচ্ছে...</p>
             </div>
         );
     }
@@ -148,9 +73,12 @@ const Home: React.FC = () => {
             className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col md:flex-row relative"
         >
             {/* Desktop/Tablet Sidebar */}
-            <aside className="hidden md:flex flex-col w-72 lg:w-80 h-screen sticky top-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-6 flex-shrink-0 z-40">
+            <aside 
+                className="hidden md:flex flex-col w-72 lg:w-80 h-screen sticky top-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-6 flex-shrink-0 z-40"
+                aria-label="Sidebar Navigation"
+            >
                 <div className="flex items-center gap-3 mb-10">
-                    <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-200 dark:shadow-none rotate-3">
+                    <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl rotate-3">
                         <BookOpen size={24} />
                     </div>
                     <div>
@@ -159,7 +87,7 @@ const Home: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto no-scrollbar space-y-2">
+                <nav className="flex-1 overflow-y-auto no-scrollbar space-y-2">
                     <p className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-600 tracking-widest mb-4 px-2">Courses</p>
                     {config?.subjects?.map((s) => {
                         const isActive = s.id === activeSubject?.id;
@@ -169,6 +97,7 @@ const Home: React.FC = () => {
                                 onClick={() => navigate(`/?subject=${s.slug}`)}
                                 whileHover={{ x: 4 }}
                                 whileTap={{ scale: 0.98 }}
+                                aria-current={isActive ? 'page' : undefined}
                                 className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all group ${
                                     isActive 
                                     ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' 
@@ -185,17 +114,18 @@ const Home: React.FC = () => {
                             </motion.button>
                         );
                     })}
-                </div>
+                </nav>
 
                 <div className="mt-auto pt-6 border-t border-slate-100 dark:border-slate-800 space-y-3">
                     <button 
                         onClick={() => navigate('/admin')}
                         className="w-full flex items-center gap-3 p-3 text-slate-500 hover:text-indigo-600 transition-colors font-bold text-sm"
+                        aria-label="Admin Access"
                     >
                         <Lock size={18} /> Admin Access
                     </button>
                     <div className="text-[10px] text-slate-400 font-medium px-3">
-                        Version 2.1.0 • © 2026
+                        Version 2.2.0 • © 2026
                     </div>
                 </div>
             </aside>
@@ -204,6 +134,7 @@ const Home: React.FC = () => {
                 <AnimatePresence mode="wait">
                     {isOffline && (
                         <motion.div 
+                            role="alert"
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
@@ -218,7 +149,7 @@ const Home: React.FC = () => {
                 {/* Sticky Header - Mobile only */}
                 <AnimatePresence>
                     {showStickyHeader && activeSubject && (
-                        <motion.div 
+                        <motion.header 
                             initial={{ y: -100, opacity: 0 }}
                             animate={{ y: 0, opacity: 1 }}
                             exit={{ y: -100, opacity: 0 }}
@@ -234,7 +165,7 @@ const Home: React.FC = () => {
                                     </h2>
                                 </div>
 
-                                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                                <nav className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1" aria-label="Subject quick selection">
                                     {config?.subjects?.map((s, idx) => (
                                         <motion.button 
                                             key={s.id}
@@ -242,6 +173,7 @@ const Home: React.FC = () => {
                                             animate={{ scale: 1, opacity: 1 }}
                                             transition={{ delay: idx * 0.05 }}
                                             onClick={() => navigate(`/?subject=${s.slug}`)}
+                                            aria-pressed={s.id === activeSubject.id}
                                             className={`px-3 py-1.5 md:px-4 md:py-2 rounded-full text-[10px] md:text-xs font-bold transition-all whitespace-nowrap active:scale-95 ${
                                                 s.id === activeSubject.id
                                                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none'
@@ -251,23 +183,22 @@ const Home: React.FC = () => {
                                             {s.name}
                                         </motion.button>
                                     ))}
-                                </div>
+                                </nav>
                             </div>
-                        </motion.div>
+                        </motion.header>
                     )}
                 </AnimatePresence>
 
                 {/* PWA Install Prompt */}
                 <AnimatePresence>
                     {canInstall && !isPromptDismissed && (
-                        <motion.div 
-                            initial={{ opacity: 0, y: -20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            className="px-4 pt-4 md:pt-6 max-w-6xl mx-auto w-full"
-                        >
-                            <div className="bg-gradient-to-r from-indigo-600 to-violet-600 rounded-[2rem] p-5 md:p-8 lg:p-12 text-white relative overflow-hidden shadow-xl shadow-indigo-500/20">
-                                {/* Background decoration */}
+                        <aside className="px-4 pt-4 md:pt-6 max-w-6xl mx-auto w-full" aria-label="Install Prompt">
+                            <motion.div 
+                                initial={{ opacity: 0, y: -20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                className="bg-gradient-to-r from-indigo-600 to-violet-600 rounded-[2rem] p-5 md:p-8 lg:p-12 text-white relative overflow-hidden shadow-xl shadow-indigo-500/20"
+                            >
                                 <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
                                 <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-32 h-32 bg-indigo-400/20 rounded-full blur-2xl pointer-events-none" />
 
@@ -277,6 +208,7 @@ const Home: React.FC = () => {
                                         AppStorage.set('pwa_prompt_dismissed', true);
                                     }}
                                     className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
+                                    aria-label="Dismiss prompt"
                                 >
                                     <X size={20} />
                                 </button>
@@ -298,12 +230,12 @@ const Home: React.FC = () => {
                                         <Download size={20} /> ইন্সটল করুন
                                     </button>
                                 </div>
-                            </div>
-                        </motion.div>
+                            </motion.div>
+                        </aside>
                     )}
                 </AnimatePresence>
 
-                <div className="flex-1 max-w-6xl mx-auto w-full lg:px-10 lg:py-8 pb-20">
+                <section className="flex-1 max-w-6xl mx-auto w-full lg:px-10 lg:py-8 pb-20">
                     {activeSubject && courseData ? (
                         <motion.div
                             key={activeSubject.id}
@@ -316,53 +248,58 @@ const Home: React.FC = () => {
                                 data={courseData} 
                                 subject={activeSubject} 
                                 subjects={config?.subjects || []}
-                                syncing={syncing}
-                                onRetry={() => fetchFreshData(activeSubject)}
+                                syncing={isDataSyncing}
+                                onRetry={() => refetchCourse()}
                                 onSubjectChange={(slug) => navigate(`/?subject=${slug}`)}
-                                error={error}
+                                error={dataError instanceof Error ? dataError.message : null}
                                 isOffline={isOffline}
                             />
                         </motion.div>
-                    ) : error ? (
-                        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
-                            <AlertCircle size={48} className="text-danger" />
-                            <h2 className="text-xl font-bold">{error}</h2>
+                    ) : dataError ? (
+                        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4" role="alert">
+                            <AlertCircle size={48} className="text-rose-500" />
+                            <h2 className="text-xl font-bold text-slate-800 dark:text-white">লোড করতে সমস্যা হচ্ছে</h2>
+                            <p className="text-slate-500 max-w-xs mx-auto">ইন্টারনেট কানেকশন চেক করে আবার চেষ্টা করুন।</p>
                             <div className="flex gap-4">
                                 <button 
-                                    onClick={() => activeSubject && fetchFreshData(activeSubject)}
-                                    className="px-6 py-2 bg-primary text-white rounded-lg flex items-center gap-2"
+                                    onClick={() => refetchCourse()}
+                                    className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-indigo-200 dark:shadow-none"
                                 >
                                     <RefreshCw size={18} /> আবার চেষ্টা করুন
                                 </button>
                                 <button 
                                     onClick={() => navigate('/admin')}
-                                    className="px-6 py-2 bg-slate-100 text-slate-600 rounded-lg"
+                                    className="px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl font-bold"
                                 >
                                     এ্যাডমিন প্যানেল
                                 </button>
                             </div>
                         </div>
                     ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center p-8">
-                            <p className="text-slate-500 mb-6 font-medium">কোনো কোর্স পাওয়া যায়নি</p>
+                        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                            <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-3xl flex items-center justify-center text-slate-400 mb-6">
+                                <BookOpen size={40} />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">কোনো কোর্স পাওয়া যায়নি</h3>
+                            <p className="text-slate-500 mb-8 max-w-xs mx-auto font-medium">হয়তো কোনো সেটিংস পরিবর্তন হয়েছে অথবা আপনার কানেকশন স্ট্যাবল নয়।</p>
                             <button 
                                 onClick={() => navigate('/admin')}
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl flex items-center justify-center gap-2 font-bold shadow-xl shadow-indigo-100 transition-all hover:-translate-y-1"
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl flex items-center justify-center gap-2 font-bold shadow-xl shadow-indigo-100 dark:shadow-none transition-all active:scale-95"
                             >
                                 <Lock size={20} /> এ্যাডমিন প্যানেল
                             </button>
                         </div>
                     )}
-                </div>
+                </section>
 
-                <div className="md:hidden">
+                <aside className="md:hidden">
                     {config?.subjects && (
                         <SubjectSelector 
                             subjects={config.subjects} 
                             activeId={activeSubject?.id || ''} 
                         />
                     )}
-                </div>
+                </aside>
             </main>
         </motion.div>
     );

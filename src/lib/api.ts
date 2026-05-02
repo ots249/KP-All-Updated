@@ -43,52 +43,38 @@ const LEGACY_BIN_ID = '69f41baaaaba8821975a738f';
 const LEGACY_ACCESS_KEY = '$2a$10$SKEMI2vP7e4rY/j38puznOW9YN./DSe.RrCvxvUmBHUGzShIe7Oay';
 
 export const API = {
-  async fetchConfig(): Promise<WebsiteConfig> {
+  async fetchConfig(signal?: AbortSignal): Promise<WebsiteConfig> {
     const path = 'settings/config';
     const cacheKey = 'app_config';
 
-    const getRemoteConfig = async () => {
-      try {
-        // 1. Try Firebase first
-        const docRef = doc(db, path);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data() as WebsiteConfig;
-          if (data.subjects && data.subjects.length > 0) {
-            AppStorage.set(cacheKey, data);
-            return data;
-          }
-        }
-        
-        // 2. Fallback to Jsonbin
-        console.log('Firebase empty, falling back to Jsonbin...');
-        const legacyData = await this.fetchLegacyConfig(LEGACY_BIN_ID);
-        AppStorage.set(cacheKey, legacyData);
-        return legacyData;
-      } catch (error) {
-        console.warn('Remote fetch failed:', error);
-        try {
-          const legacyData = await this.fetchLegacyConfig(LEGACY_BIN_ID);
-          AppStorage.set(cacheKey, legacyData);
-          return legacyData;
-        } catch (legacyError) {
-          return null;
+    try {
+      // 1. Try Firebase first
+      const docRef = doc(db, path);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data() as WebsiteConfig;
+        if (data.subjects && data.subjects.length > 0) {
+          AppStorage.set(cacheKey, data);
+          return data;
         }
       }
-    };
-
-    const cachedConfig = AppStorage.get<WebsiteConfig>(cacheKey);
-    if (cachedConfig) {
-      getRemoteConfig(); // Background update
-      return cachedConfig;
+      
+      // 2. Fallback to Jsonbin
+      const legacyData = await this.fetchLegacyConfig(LEGACY_BIN_ID, signal);
+      AppStorage.set(cacheKey, legacyData);
+      return legacyData;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      console.warn('Config fetch failed, using cache:', error);
+      const cached = AppStorage.get<WebsiteConfig>(cacheKey);
+      if (cached) return cached;
+      throw error;
     }
-
-    const freshConfig = await getRemoteConfig();
-    return freshConfig || { subjects: [] };
   },
 
-  async fetchLegacyConfig(binId: string): Promise<WebsiteConfig> {
+  async fetchLegacyConfig(binId: string, signal?: AbortSignal): Promise<WebsiteConfig> {
     const response = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+      signal,
       headers: { 
         'X-Master-Key': LEGACY_ACCESS_KEY,
         'X-Bin-Meta': 'false'
@@ -101,10 +87,7 @@ export const API = {
   async updateConfig(config: WebsiteConfig): Promise<void> {
     const path = 'settings/config';
     try {
-      // Save to Firebase (Primary)
       await setDoc(doc(db, path), config);
-      
-      // Also sync to Jsonbin to keep it updated
       try {
         await fetch(`https://api.jsonbin.io/v3/b/${LEGACY_BIN_ID}`, {
           method: 'PUT',
@@ -123,36 +106,20 @@ export const API = {
     }
   },
 
-  async fetchCourseData(url: string): Promise<CourseData> {
+  async fetchCourseData(url: string, signal?: AbortSignal): Promise<CourseData> {
     const cacheKey = `course_data_${url}`;
-    
-    // Attempt fetch in background if we have cache
-    const fetchAndCache = async () => {
-      try {
-        const response = await fetch(url);
-        if (response.ok) {
-          const data = await response.json();
-          AppStorage.set(cacheKey, data);
-          return data;
-        }
-      } catch (e) {
-        console.warn('Background fetch failed:', e);
-      }
-      return null;
-    };
-
-    const cachedData = AppStorage.get<CourseData>(cacheKey);
-    
-    if (cachedData) {
-      // Trigger background update
-      fetchAndCache();
-      return cachedData;
+    try {
+      const response = await fetch(url, { signal });
+      if (!response.ok) throw new Error('Fetch failed');
+      const data = await response.json();
+      AppStorage.set(cacheKey, data);
+      return data;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      const cached = AppStorage.get<CourseData>(cacheKey);
+      if (cached) return cached;
+      throw error;
     }
-
-    // No cache, must wait for network
-    const freshData = await fetchAndCache();
-    if (!freshData) throw new Error('Failed to fetch course data');
-    return freshData;
   },
 
   onConfigUpdate(callback: (config: WebsiteConfig) => void) {

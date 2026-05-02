@@ -6,10 +6,13 @@ import { Plus, Trash2, Edit2, Save, X, ExternalLink, Settings, LayoutGrid, Check
 import { useNavigate } from 'react-router-dom';
 import { signInAnonymously } from 'firebase/auth';
 import { auth } from '../lib/firebase';
+import { useConfig, useUpdateConfig } from '../hooks/useCourseQueries';
 
 const Admin: React.FC = () => {
-    const [config, setConfig] = useState<WebsiteConfig | null>(null);
-    const [loading, setLoading] = useState(true);
+    // React Query Hooks
+    const { data: config, isLoading: isConfigLoading, refetch: loadConfig } = useConfig();
+    const updateConfigMutation = useUpdateConfig();
+
     const [saving, setSaving] = useState(false);
     const [testingApi, setTestingApi] = useState(false);
     const [importing, setImporting] = useState(false);
@@ -31,8 +34,8 @@ const Admin: React.FC = () => {
     });
     const [legacyBinId, setLegacyBinId] = useState('69f41baaaaba8821975a738f');
     const [isAuthenticated, setIsAuthenticated] = useState(() => {
-        const auth = AppStorage.get<boolean>('admin_auth');
-        return auth === true;
+        const authStat = AppStorage.get<boolean>('admin_auth');
+        return authStat === true;
     });
     const [password, setPassword] = useState('');
     const [loggingIn, setLoggingIn] = useState(false);
@@ -48,12 +51,10 @@ const Admin: React.FC = () => {
     const [sortOrder, setSortOrder] = useState<'none' | 'asc' | 'desc'>('none');
 
     useEffect(() => {
-        if (isAuthenticated) {
-            loadConfig();
-        } else {
-            setLoading(false);
+        if (isAuthenticated && config) {
+            checkSync(config);
         }
-    }, [isAuthenticated]);
+    }, [isAuthenticated, config]);
 
     const handleImport = async () => {
         if (!legacyBinId) return setMessage({ text: 'Bin ID প্রদান করুন', type: 'error' });
@@ -119,18 +120,6 @@ const Admin: React.FC = () => {
         navigate('/');
     };
 
-    const loadConfig = async () => {
-        try {
-            const data = await API.fetchConfig();
-            setConfig(data);
-            checkSync(data);
-        } catch (err) {
-            setMessage({ text: 'কনফিগ লোড করতে ব্যর্থ', type: 'error' });
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const checkSync = async (fbConfig: WebsiteConfig) => {
         setSyncStatus(prev => ({ ...prev, status: 'checking' }));
         setDiscrepancies([]);
@@ -144,7 +133,6 @@ const Admin: React.FC = () => {
             let missingInFbCount = 0;
             let diffCount = 0;
             
-            // Check for missing/different in JB (What's in FB that's not in JB)
             fbSubjects.forEach(fb => {
                 const jb = jbSubjects.find(j => j.id === fb.id || j.slug === fb.slug);
                 if (!jb) {
@@ -156,7 +144,6 @@ const Admin: React.FC = () => {
                 }
             });
 
-            // Check for missing in FB (What's in JB that's not in FB)
             jbSubjects.forEach(jb => {
                 if (!fbSubjects.find(fb => fb.id === jb.id || fb.slug === jb.slug)) {
                     diffs.push({ id: jb.id, type: 'missing_in_fb' });
@@ -182,7 +169,7 @@ const Admin: React.FC = () => {
         if (!config) return;
         setSyncing(true);
         try {
-            await API.updateConfig(config); // This already syncs to both
+            await updateConfigMutation.mutateAsync(config);
             await checkSync(config);
             setMessage({ text: 'সব ডাটা সিঙ্ক করা হয়েছে', type: 'success' });
         } catch (err) {
@@ -197,10 +184,7 @@ const Admin: React.FC = () => {
         setSaving(true);
         try {
             const finalConfig = { ...updatedConfig, lastUpdated: new Date().toISOString() };
-            await API.updateConfig(finalConfig);
-            setConfig(finalConfig);
-            checkSync(finalConfig);
-            AppStorage.set('website_config', finalConfig);
+            await updateConfigMutation.mutateAsync(finalConfig);
             setMessage({ text: 'সফলভাবে সেভ করা হয়েছে!', type: 'success' });
             setTimeout(() => setMessage(null), 3000);
         } catch (err) {
@@ -304,7 +288,7 @@ const Admin: React.FC = () => {
         return subjects;
     };
 
-    if (loading) return (
+    if (isConfigLoading && !config) return (
         <div className="flex flex-col items-center justify-center min-h-screen space-y-4">
             <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
             <p className="text-slate-500 font-bold">লোডিং হচ্ছে...</p>
