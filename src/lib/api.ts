@@ -143,5 +143,11 @@ export const AppStorage = {
   },
   set(key: string, value: any): void {
     localStorage.setItem(key, JSON.stringify(value));
+  },
+  getAdminAuth(): boolean {
+    return AppStorage.get<boolean>('admin_auth') || false;
+  },
+  setAdminAuth(val: boolean): void {
+    AppStorage.set('admin_auth', val);
   }
 };

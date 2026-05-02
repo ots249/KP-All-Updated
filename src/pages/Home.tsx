@@ -20,8 +20,10 @@ const Home: React.FC = () => {
 
     const [showStickyHeader, setShowStickyHeader] = useState(false);
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
-    const { canInstall, install } = usePWAInstall();
+    const { canInstall, install, isIOS, isStandalone } = usePWAInstall();
     const [isPromptDismissed, setIsPromptDismissed] = useState(AppStorage.get<boolean>('pwa_prompt_dismissed') || false);
+
+    const showPwaPrompt = (canInstall || (isIOS && !isStandalone)) && !isPromptDismissed;
 
     // Offline event listeners
     useEffect(() => {
@@ -191,7 +193,7 @@ const Home: React.FC = () => {
 
                 {/* PWA Install Prompt */}
                 <AnimatePresence>
-                    {canInstall && !isPromptDismissed && (
+                    {showPwaPrompt && (
                         <aside className="px-4 pt-4 md:pt-6 max-w-6xl mx-auto w-full" aria-label="Install Prompt">
                             <motion.div 
                                 initial={{ opacity: 0, y: -20 }}
@@ -217,17 +219,23 @@ const Home: React.FC = () => {
                                         <Download size={24} />
                                     </div>
                                     <div className="flex-1 text-center md:text-left space-y-1">
-                                        <h3 className="text-lg md:text-xl font-black">আমাদের অ্যাপটি ব্যবহার করুন</h3>
+                                        <h3 className="text-lg md:text-xl font-black">
+                                            {isIOS ? 'আইফোনে অ্যাপটি যুক্ত করুন' : 'আমাদের অ্যাপটি ব্যবহার করুন'}
+                                        </h3>
                                         <p className="text-slate-500 dark:text-slate-400 font-medium text-xs md:text-sm">
-                                            সহজ এবং দ্রুত অ্যাক্সেস পেতে আপনার ডিভাইসের হোম স্ক্রিনে অ্যাপটি যুক্ত করুন।
+                                            {isIOS 
+                                                ? 'নিচের শিয়ার (Share) আইকনে ট্যাপ করে "Add to Home Screen" অপশনটি সিলেক্ট করুন।' 
+                                                : 'সহজ এবং দ্রুত অ্যাক্সেস পেতে আপনার ডিভাইসের হোম স্ক্রিনে অ্যাপটি যুক্ত করুন।'}
                                         </p>
                                     </div>
-                                    <button 
-                                        onClick={install}
-                                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-indigo-500/20"
-                                    >
-                                        ইন্সটল করুন
-                                    </button>
+                                    {!isIOS && (
+                                        <button 
+                                            onClick={install}
+                                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-indigo-500/20"
+                                        >
+                                            ইন্সটল করুন
+                                        </button>
+                                    )}
                                 </div>
                             </motion.div>
                         </aside>
