@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { API, AppStorage } from '../lib/api';
 import { WebsiteConfig, Subject, CourseData, CourseSection, CourseContent } from '../types';
-import { ChevronRight, CheckCircle2, Circle, FileText, Youtube, Video, MessageCircle, Clock, AlertCircle, RefreshCw, Settings, WifiOff, Cloud, Search, X } from 'lucide-react';
+import { ChevronRight, CheckCircle2, Circle, FileText, Youtube, Video, MessageCircle, Clock, AlertCircle, RefreshCw, Settings, WifiOff, Cloud, Search, X, Star } from 'lucide-react';
 import MediaViewer from './MediaViewer';
 import { extractYouTubeVideoId, getVideoDuration } from '../lib/youtube';
 
@@ -17,8 +17,14 @@ const VideoDuration: React.FC<{ url: string }> = ({ url }) => {
         }
     }, [url]);
 
+    const isLive = duration === 'LIVE';
+
     return (
-        <div className="shrink-0 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md text-[10px] font-black text-text-light tracking-tighter">
+        <div className={`shrink-0 px-2 py-1 rounded-md text-[10px] font-black tracking-tighter ${
+            isLive 
+            ? 'bg-rose-500 text-white animate-pulse' 
+            : 'bg-slate-100 dark:bg-slate-800 text-text-light'
+        }`}>
             {duration}
         </div>
     );
@@ -45,20 +51,45 @@ interface Props {
   isOffline?: boolean;
 }
 
+const SkeletonLoader = () => (
+    <div className="space-y-4 animate-pulse">
+        <div className="h-64 bg-slate-100 dark:bg-slate-800 rounded-3xl" />
+        <div className="h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl" />
+        <div className="space-y-3">
+            {[1, 2, 3, 4].map(i => (
+                <div key={i} className="h-20 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800" />
+            ))}
+        </div>
+    </div>
+);
+
 const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, isOffline }) => {
     const [activeSectionId, setActiveSectionId] = useState<string | number | null>(data.sections[0]?.id || 2026);
     const [searchTerm, setSearchTerm] = useState('');
+    const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
     const [completionMap, setCompletionMap] = useState<Record<string, boolean>>(() => 
         AppStorage.get<Record<string, boolean>>(`completedItems_${subject.apiUrl}`) || {}
     );
+    const [favoritesMap, setFavoritesMap] = useState<Record<string, boolean>>(() => 
+        AppStorage.get<Record<string, boolean>>(`favoritesItems_${subject.apiUrl}`) || {}
+    );
     const [activeMedia, setActiveMedia] = useState<{ url: string, type: 'video' | 'pdf' | 'other', title: string } | null>(null);
 
-    // Filtered sections and contents based on search
+    // Filtered sections and contents based on search and favorites
     const filteredSections = useMemo(() => {
-        if (!searchTerm.trim()) return data.sections;
+        let sections = data.sections;
+
+        if (showOnlyFavorites) {
+            sections = sections.map(section => ({
+                ...section,
+                contents: section.contents.filter(item => favoritesMap[item.id])
+            })).filter(section => section.contents.length > 0);
+        }
+
+        if (!searchTerm.trim()) return sections;
 
         const term = searchTerm.toLowerCase().trim();
-        return data.sections.map(section => {
+        return sections.map(section => {
             const matchesSection = section.title.toLowerCase().includes(term);
             const filteredContents = section.contents.filter(item => 
                 item.title.toLowerCase().includes(term)
@@ -73,18 +104,22 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
             }
             return null;
         }).filter(Boolean) as (CourseSection & { isSearchMatch?: boolean })[];
-    }, [data.sections, searchTerm]);
+    }, [data.sections, searchTerm, showOnlyFavorites, favoritesMap]);
 
     useEffect(() => {
         // Auto-expand sections when searching
-        if (searchTerm.trim() && filteredSections.length > 0) {
+        if ((searchTerm.trim() || showOnlyFavorites) && filteredSections.length > 0) {
             setActiveSectionId(filteredSections[0].id || 0);
         }
-    }, [searchTerm, filteredSections]);
+    }, [searchTerm, filteredSections, showOnlyFavorites]);
 
     useEffect(() => {
         AppStorage.set(`completedItems_${subject.apiUrl}`, completionMap);
     }, [completionMap, subject.apiUrl]);
+
+    useEffect(() => {
+        AppStorage.set(`favoritesItems_${subject.apiUrl}`, favoritesMap);
+    }, [favoritesMap, subject.apiUrl]);
 
     const toggleSection = (id: string | number) => {
         setActiveSectionId(prev => (prev === id ? null : id));
@@ -93,6 +128,14 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
     const toggleComplete = (itemId: string | number, e: React.MouseEvent) => {
         e.stopPropagation();
         setCompletionMap(prev => ({
+            ...prev,
+            [itemId]: !prev[itemId]
+        }));
+    };
+
+    const toggleFavorite = (itemId: string | number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setFavoritesMap(prev => ({
             ...prev,
             [itemId]: !prev[itemId]
         }));
@@ -191,8 +234,8 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
                 </div>
             </div>
 
-            <div className="px-4 py-2">
-                <div className="relative group">
+            <div className="px-4 py-2 flex gap-3">
+                <div className="relative group flex-1">
                     <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors">
                         <Search size={18} />
                     </div>
@@ -212,6 +255,17 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
                         </button>
                     )}
                 </div>
+                <button 
+                    onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
+                    className={`shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center transition-all border ${
+                        showOnlyFavorites 
+                        ? 'bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-200 dark:shadow-none' 
+                        : 'bg-white dark:bg-slate-800 border-border text-slate-400 hover:text-amber-500'
+                    }`}
+                    title={showOnlyFavorites ? "সবগুলো দেখুন" : "পছন্দসইগুলো দেখুন"}
+                >
+                    <Star size={24} fill={showOnlyFavorites ? "currentColor" : "none"} />
+                </button>
             </div>
 
             <div className="px-4 py-2">
@@ -231,7 +285,9 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
             </div>
 
             <div className="px-4 py-2 space-y-4 pb-24">
-                {filteredSections.length === 0 ? (
+                {syncing && filteredSections.length === 0 ? (
+                    <SkeletonLoader />
+                ) : filteredSections.length === 0 ? (
                     <div className="py-12 text-center space-y-4">
                         <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto text-slate-400">
                             <Search size={32} />
@@ -253,25 +309,31 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
                         const completedInSection = section.contents.filter(c => completionMap[c.id]).length;
                         
                         return (
-                            <div key={section.id || idx} className="bg-card-bg rounded-3xl shadow-sm border border-border overflow-hidden transition-all">
+                            <motion.div 
+                                key={section.id || idx} 
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: idx * 0.1 }}
+                                className="bg-card-bg rounded-3xl shadow-sm border border-border overflow-hidden transition-all"
+                            >
                                 <button 
                                     onClick={() => toggleSection(section.id || idx)}
-                                    className="w-full px-6 py-5 flex items-center justify-between text-left"
+                                    className="w-full px-6 py-5 flex items-center justify-between text-left group"
                                 >
                                     <div className="flex items-center gap-4">
-                                        <ChevronRight 
-                                            size={20} 
-                                            className={`text-indigo-600 transition-transform duration-500 ${isExpanded ? 'rotate-90' : ''}`} 
-                                        />
-                                        <h3 className="font-bold text-[16px] text-text leading-tight">
+                                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isExpanded ? 'bg-indigo-600 text-white rotate-90 shadow-lg shadow-indigo-100' : 'bg-slate-100 dark:bg-slate-800 text-indigo-600'}`}>
+                                            <ChevronRight size={20} />
+                                        </div>
+                                        <h3 className="font-bold text-[16px] text-text leading-tight group-hover:text-indigo-600 transition-colors">
                                             {section.title}
                                         </h3>
                                     </div>
                                     <div className="flex items-center gap-4">
                                         <div className="w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden hidden xs:block">
-                                            <div 
+                                            <motion.div 
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${(completedInSection / section.contents.length) * 100}%` }}
                                                 className="h-full bg-indigo-200 dark:bg-indigo-900 rounded-full" 
-                                                style={{ width: `${(completedInSection / section.contents.length) * 100}%` }}
                                             />
                                         </div>
                                         <span className="text-xs font-black text-success/80 min-w-[30px] text-right">
@@ -296,19 +358,22 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
                                                 const isPDF = item.type === 'pdf' || item.title.toLowerCase().includes('pdf') || link.toLowerCase().includes('.pdf');
                                                 
                                                 return (
-                                                    <div 
+                                                    <motion.div 
                                                         key={item.id || cIdx}
+                                                        initial={{ opacity: 0, x: -10 }}
+                                                        animate={{ opacity: 1, x: 0 }}
+                                                        transition={{ delay: cIdx * 0.04, duration: 0.3 }}
                                                         onClick={() => handleItemClick(item)}
-                                                        className={`p-4 rounded-2xl border border-border transition-all flex items-center gap-4 cursor-pointer shadow-sm ${
+                                                        className={`p-4 rounded-2xl border border-border transition-all flex items-center gap-4 cursor-pointer shadow-sm group active:scale-[0.98] ${
                                                             isDone 
                                                             ? 'bg-slate-50/50 dark:bg-slate-900/50 opacity-60' 
-                                                            : 'bg-card-bg hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 active:scale-[0.98]'
+                                                            : 'bg-card-bg hover:bg-white dark:hover:bg-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900/40 hover:shadow-md'
                                                         }`}
                                                     >
                                                         <div 
                                                             onClick={(e) => toggleComplete(item.id, e)}
-                                                            className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
-                                                                isDone ? 'bg-indigo-600 border-indigo-600' : 'border-slate-200 dark:border-slate-700'
+                                                            className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all group-hover:scale-110 ${
+                                                                isDone ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-600'
                                                             }`}
                                                         >
                                                             {isDone && <CheckCircle2 size={16} className="text-white" />}
@@ -323,26 +388,40 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
                                                                 {item.title}
                                                             </div>
                                                             {isPDF && (
-                                                                <div className="flex items-center gap-1 mt-0.5 text-[#10b981] text-[9px] font-black uppercase tracking-tighter">
+                                                                <motion.div 
+                                                                    animate={{ opacity: [1, 0.5, 1] }}
+                                                                    transition={{ duration: 2, repeat: Infinity }}
+                                                                    className="flex items-center gap-1 mt-0.5 text-[#10b981] text-[9px] font-black uppercase tracking-tighter"
+                                                                >
                                                                     <Cloud size={10} fill="currentColor" className="opacity-50" />
                                                                     <span>Offline Available</span>
-                                                                </div>
+                                                                </motion.div>
                                                             )}
                                                         </div>
  
                                                         {isYouTube && (
                                                             <VideoDuration url={link} />
                                                         )}
-                                                    </div>
+
+                                                        <button 
+                                                            onClick={(e) => toggleFavorite(item.id, e)}
+                                                            className={`p-2 transition-all hover:scale-110 active:scale-95 ${
+                                                                favoritesMap[item.id] ? 'text-amber-500' : 'text-slate-300 dark:text-slate-700 hover:text-amber-300'
+                                                            }`}
+                                                        >
+                                                            <Star size={18} fill={favoritesMap[item.id] ? "currentColor" : "none"} />
+                                                        </button>
+                                                    </motion.div>
                                                 );
                                             })}
                                         </div>
                                     </motion.div>
                                 )}
-                            </AnimatePresence>
-                        </div>
-                    );
-                }))}
+                                </AnimatePresence>
+                            </motion.div>
+                        );
+                    })
+                )}
             </div>
 
             {activeMedia && (

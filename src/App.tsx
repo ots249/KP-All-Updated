@@ -37,13 +37,15 @@ const App: React.FC = () => {
 
             {location.pathname !== '/admin' && location.pathname !== '/app' && (
                 <div className="fixed bottom-6 left-6 z-50 flex items-center gap-4">
-                  <button 
+                  <motion.button 
+                    whileHover={{ scale: 1.1, rotate: 180 }}
+                    whileTap={{ scale: 0.9 }}
                     onClick={() => window.location.reload()}
-                    className="w-14 h-14 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 active:scale-90 transition-all flex items-center justify-center hover:rotate-90 duration-500"
-                    title="Refresh"
+                    className="w-14 h-14 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 flex items-center justify-center transition-all"
+                    title="রিফ্রেশ করুন"
                   >
                     <RefreshCw size={24} />
-                  </button>
+                  </motion.button>
 
                   <button 
                     onClick={toggleTheme}

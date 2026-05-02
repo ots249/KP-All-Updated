@@ -51,11 +51,16 @@ const SubjectSelector: React.FC<Props> = ({ subjects, activeId }) => {
                             </div>
 
                             <div className="grid gap-4">
-                                {subjects.map(s => {
+                                {subjects.map((s, idx) => {
                                     const isActive = s.id === activeId;
                                     return (
-                                        <button
+                                        <motion.button
                                             key={s.id}
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: idx * 0.05 }}
+                                            whileHover={{ x: 5 }}
+                                            whileTap={{ scale: 0.98 }}
                                             onClick={() => {
                                                 setSearchParams({ subject: s.slug });
                                                 setIsOpen(false);
@@ -75,11 +80,11 @@ const SubjectSelector: React.FC<Props> = ({ subjects, activeId }) => {
                                                 <span className="font-black text-lg">{s.name}</span>
                                             </div>
                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                                                isActive ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 group-hover:scale-110'
+                                                isActive ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white'
                                             }`}>
                                                 <ChevronRight size={18} />
                                             </div>
-                                        </button>
+                                        </motion.button>
                                     );
                                 })}
                             </div>

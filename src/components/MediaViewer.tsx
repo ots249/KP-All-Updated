@@ -43,7 +43,7 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
   const Player = (ReactPlayer as any).default || ReactPlayer;
 
   const youtubeId = type === 'video' ? extractYouTubeVideoId(url) : null;
-  const youtubeEmbedUrl = youtubeId ? `https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}` : null;
+  const youtubeEmbedUrl = youtubeId ? `https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1&enablejsapi=1` : null;
 
   return (
     <AnimatePresence>
@@ -68,7 +68,7 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
           <div className={`${
             type === 'video' 
               ? 'bg-[#1f1f1f] border-b border-[#333]' 
-              : 'bg-white border-b border-slate-200 shadow-sm'
+              : 'bg-white border-b border-slate-200'
           } px-4 py-3 md:px-8 md:py-4 flex items-center justify-between z-20 shrink-0`}>
             <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
               {type === 'video' ? (
@@ -76,11 +76,11 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
                   <Youtube size={28} className="fill-current" />
                 </div>
               ) : (
-                <div className="text-rose-500 shrink-0">
+                <div className="text-[#ef4444] shrink-0">
                   <FileText size={28} />
                 </div>
               )}
-              <h3 className={`font-bold text-sm md:text-lg truncate max-w-xs md:max-w-md ${
+              <h3 className={`font-bold text-[15px] md:text-lg truncate ${
                 type === 'video' ? 'text-white' : 'text-slate-800'
               }`}>
                 {title}
@@ -99,23 +99,26 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
                     <span className="hidden sm:inline">ইউটিউবে দেখুন</span>
                   </a>
                ) : type === 'pdf' ? (
-                  <a 
-                    href={url} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 md:px-6 md:py-2.5 rounded-xl text-xs md:text-sm font-bold flex items-center gap-2 transition-all hover:scale-105 shadow-lg shadow-blue-500/20"
+                  <button 
+                    onClick={() => {
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = title || 'document.pdf';
+                      a.click();
+                    }}
+                    className="bg-[#2563eb] hover:bg-[#1d4ed8] text-white px-3 py-1.5 md:px-6 md:py-2.5 rounded-lg text-xs md:text-sm font-bold flex items-center gap-2 transition-all hover:-translate-y-0.5 shadow-lg shadow-blue-500/30"
                   >
                     <Download size={16} />
-                    <span className="hidden sm:inline">ডাউনলোড</span>
-                  </a>
+                    <span>ডাউনলোড</span>
+                  </button>
                ) : null}
               
               <button 
                 onClick={onClose}
-                className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all hover:rotate-90 ${
+                className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all hover:rotate-90 shadow-sm ${
                   type === 'video' 
                     ? 'bg-white/5 hover:bg-white/15 text-white border border-white/10' 
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200'
+                    : 'bg-white hover:bg-slate-50 text-slate-500 border border-slate-200'
                 }`}
                 title="বন্ধ করুন (Esc)"
               >

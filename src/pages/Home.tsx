@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Subject, WebsiteConfig, CourseData } from '../types';
 import { API, AppStorage } from '../lib/api';
-import { BookOpen, AlertCircle, RefreshCw, Lock, Info, ChevronRight } from 'lucide-react';
+import { BookOpen, AlertCircle, RefreshCw, Lock, Download, Sparkles, X } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
 import CourseView from '../components/CourseView';
 import SubjectSelector from '../components/SubjectSelector';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 
 const Home: React.FC = () => {
     const [config, setConfig] = useState<WebsiteConfig | null>(AppStorage.get<WebsiteConfig>('website_config'));
@@ -19,6 +20,8 @@ const Home: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [showStickyHeader, setShowStickyHeader] = useState(false);
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
+    const { canInstall, install } = usePWAInstall();
+    const [isPromptDismissed, setIsPromptDismissed] = useState(AppStorage.get<boolean>('pwa_prompt_dismissed') || false);
 
     // Offline event listeners
     useEffect(() => {
@@ -178,9 +181,12 @@ const Home: React.FC = () => {
                             </div>
 
                             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-                                {config?.subjects?.map(s => (
-                                    <button 
+                                {config?.subjects?.map((s, idx) => (
+                                    <motion.button 
                                         key={s.id}
+                                        initial={{ scale: 0.8, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        transition={{ delay: idx * 0.05 }}
                                         onClick={() => navigate(`/?subject=${s.slug}`)}
                                         className={`px-3 py-1.5 md:px-4 md:py-2 rounded-full text-[10px] md:text-xs font-bold transition-all whitespace-nowrap active:scale-95 ${
                                             s.id === activeSubject.id
@@ -189,7 +195,7 @@ const Home: React.FC = () => {
                                         }`}
                                     >
                                         {s.name}
-                                    </button>
+                                    </motion.button>
                                 ))}
                             </div>
                         </div>
@@ -197,15 +203,68 @@ const Home: React.FC = () => {
                 )}
             </AnimatePresence>
 
+            {/* PWA Install Prompt */}
+            <AnimatePresence>
+                {canInstall && !isPromptDismissed && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="px-4 pt-4 md:pt-6"
+                    >
+                        <div className="bg-gradient-to-r from-indigo-600 to-violet-600 rounded-[2rem] p-5 md:p-8 text-white relative overflow-hidden shadow-xl shadow-indigo-500/20">
+                            {/* Background decoration */}
+                            <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+                            <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-32 h-32 bg-indigo-400/20 rounded-full blur-2xl pointer-events-none" />
+
+                            <button 
+                                onClick={() => {
+                                    setIsPromptDismissed(true);
+                                    AppStorage.set('pwa_prompt_dismissed', true);
+                                }}
+                                className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+
+                            <div className="relative flex flex-col md:flex-row items-center gap-6">
+                                <div className="w-16 h-16 md:w-20 md:h-20 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0">
+                                    <Sparkles size={32} className="text-amber-300" />
+                                </div>
+                                <div className="flex-1 text-center md:text-left space-y-2">
+                                    <h3 className="text-xl md:text-2xl font-black">প্লে-স্টোর অ্যাপের মতো ব্যবহার করুন!</h3>
+                                    <p className="text-white/80 font-medium text-sm md:text-base">
+                                        সহজে এবং দ্রুত অ্যাক্সেস করতে আপনার ফোনে অ্যাপটি ইন্সটল করে নিন।
+                                    </p>
+                                </div>
+                                <button 
+                                    onClick={install}
+                                    className="bg-white text-indigo-600 px-8 py-3 md:py-4 rounded-xl font-bold flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-black/10"
+                                >
+                                    <Download size={20} /> ইন্সটল করুন
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {activeSubject && courseData ? (
-                <CourseView 
-                    data={courseData} 
-                    subject={activeSubject} 
-                    syncing={syncing}
-                    onRetry={() => fetchFreshData(activeSubject)}
-                    error={error}
-                    isOffline={isOffline}
-                />
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.5 }}
+                >
+                    <CourseView 
+                        data={courseData} 
+                        subject={activeSubject} 
+                        syncing={syncing}
+                        onRetry={() => fetchFreshData(activeSubject)}
+                        error={error}
+                        isOffline={isOffline}
+                    />
+                </motion.div>
             ) : error ? (
                 <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
                     <AlertCircle size={48} className="text-danger" />
