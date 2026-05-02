@@ -83,7 +83,8 @@ const Admin: React.FC = () => {
         try {
             await updateConfig.mutateAsync({ 
                 ...config!, 
-                subjects: updatedSubjects 
+                subjects: updatedSubjects,
+                lastUpdated: new Date().toISOString()
             });
             setShowAddModal(false);
             setFormData({ name: '', slug: '', apiUrl: '' });
@@ -98,7 +99,11 @@ const Admin: React.FC = () => {
         if (!window.confirm('Permanent Deletion: Are you sure you want to remove this record?')) return;
         if (!config) return;
         const updatedSubjects = config.subjects.filter(s => s.id !== id);
-        await updateConfig.mutateAsync({ ...config, subjects: updatedSubjects });
+        await updateConfig.mutateAsync({ 
+            ...config, 
+            subjects: updatedSubjects,
+            lastUpdated: new Date().toISOString()
+        });
     };
 
     const startEditing = (subject: Subject) => {
@@ -113,7 +118,11 @@ const Admin: React.FC = () => {
             s.id === editingSubject.id ? { ...s, ...formData } : s
         );
         
-        await updateConfig.mutateAsync({ ...config, subjects: updatedSubjects });
+        await updateConfig.mutateAsync({ 
+            ...config, 
+            subjects: updatedSubjects,
+            lastUpdated: new Date().toISOString()
+        });
         setEditingSubject(null);
         setFormData({ name: '', slug: '', apiUrl: '' });
         setSaving(false);
@@ -126,12 +135,20 @@ const Admin: React.FC = () => {
         if (newIndex < 0 || newIndex >= subjects.length) return;
 
         [subjects[index], subjects[newIndex]] = [subjects[newIndex], subjects[index]];
-        await updateConfig.mutateAsync({ ...config, subjects });
+        await updateConfig.mutateAsync({ 
+            ...config, 
+            subjects,
+            lastUpdated: new Date().toISOString()
+        });
     };
 
     const setDefaultSubject = async (id: string) => {
         if (!config) return;
-        await updateConfig.mutateAsync({ ...config, defaultSubjectId: id });
+        await updateConfig.mutateAsync({ 
+            ...config, 
+            defaultSubjectId: id,
+            lastUpdated: new Date().toISOString()
+        });
     };
 
     const handleImport = async () => {
@@ -141,7 +158,11 @@ const Admin: React.FC = () => {
             const response = await fetch(`https://api.jsonbin.io/v3/b/${legacyBinId}/latest`);
             const data = await response.json();
             if (data.record && data.record.subjects) {
-                await updateConfig.mutateAsync({ subjects: data.record.subjects });
+                await updateConfig.mutateAsync({ 
+                    ...(config || { subjects: [] }),
+                    subjects: data.record.subjects,
+                    lastUpdated: new Date().toISOString()
+                });
                 setShowImportDialog(false);
                 setLegacyBinId('');
                 alert('Migration Successful: Data synchronized.');
