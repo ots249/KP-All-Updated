@@ -57,16 +57,6 @@ const App: React.FC = () => {
                   >
                     <RefreshCw size={24} />
                   </button>
-
-                  {!isStandalone && (
-                    <button 
-                      onClick={() => navigate('/app')}
-                      className="h-14 px-6 bg-indigo-600 text-white rounded-2xl shadow-xl shadow-indigo-200 active:scale-90 transition-all flex items-center gap-3 font-bold border-2 border-indigo-400/20"
-                    >
-                      <Smartphone size={20} />
-                      <span className="hidden sm:inline">Install App</span>
-                    </button>
-                  )}
                 </div>
             )}
         </div>

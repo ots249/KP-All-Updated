@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { API, AppStorage } from '../lib/api';
 import { WebsiteConfig, Subject, CourseData, CourseSection, CourseContent } from '../types';
-import { ChevronRight, CheckCircle2, Circle, FileText, Youtube, Video, MessageCircle, Clock, AlertCircle, RefreshCw, Settings } from 'lucide-react';
+import { ChevronRight, CheckCircle2, Circle, FileText, Youtube, Video, MessageCircle, Clock, AlertCircle, RefreshCw, Settings, WifiOff, Cloud } from 'lucide-react';
 import MediaViewer from './MediaViewer';
 import { extractYouTubeVideoId, getVideoDuration } from '../lib/youtube';
 
@@ -42,9 +42,10 @@ interface Props {
   syncing: boolean;
   onRetry: () => void;
   error: string | null;
+  isOffline?: boolean;
 }
 
-const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error }) => {
+const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, isOffline }) => {
     const [activeSectionId, setActiveSectionId] = useState<string | number | null>(data.sections[0]?.id || 2026);
     const [completionMap, setCompletionMap] = useState<Record<string, boolean>>(() => 
         AppStorage.get<Record<string, boolean>>(`completedItems_${subject.apiUrl}`) || {}
@@ -137,6 +138,12 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error })
                             Syncing
                         </div>
                     )}
+                    {isOffline && (
+                        <div className="absolute top-4 right-4 bg-amber-500/90 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 text-[10px] text-white font-bold uppercase tracking-widest shadow-lg">
+                            <WifiOff size={10} />
+                            Offline Mode
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -216,6 +223,7 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error })
                                                 const isDone = completionMap[item.id];
                                                 const link = resolveLink(item);
                                                 const isYouTube = item.type === 'video' || item.title.toLowerCase().includes('video') || link.toLowerCase().includes('youtube') || link.toLowerCase().includes('youtu.be');
+                                                const isPDF = item.type === 'pdf' || item.title.toLowerCase().includes('pdf') || link.toLowerCase().includes('.pdf');
                                                 
                                                 return (
                                                     <div 
@@ -240,10 +248,16 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error })
                                                             {getIcon(item)}
                                                         </div>
                                                         
-                                                        <div className="flex-1">
+                                                        <div className="flex-1 min-w-0">
                                                             <div className="text-[15px] font-bold text-text line-clamp-1">
                                                                 {item.title}
                                                             </div>
+                                                            {isPDF && (
+                                                                <div className="flex items-center gap-1 mt-0.5 text-[#10b981] text-[9px] font-black uppercase tracking-tighter">
+                                                                    <Cloud size={10} fill="currentColor" className="opacity-50" />
+                                                                    <span>Offline Available</span>
+                                                                </div>
+                                                            )}
                                                         </div>
  
                                                         {isYouTube && (

@@ -18,7 +18,17 @@ const Admin: React.FC = () => {
         status: 'synced' | 'out-of-sync' | 'error' | 'checking';
         firebaseCount: number;
         jsonbinCount: number;
-    }>({ status: 'checking', firebaseCount: 0, jsonbinCount: 0 });
+        missingInFbCount: number;
+        missingInJbCount: number;
+        diffCount: number;
+    }>({ 
+        status: 'checking', 
+        firebaseCount: 0, 
+        jsonbinCount: 0,
+        missingInFbCount: 0,
+        missingInJbCount: 0,
+        diffCount: 0
+    });
     const [legacyBinId, setLegacyBinId] = useState('69f41baaaaba8821975a738f');
     const [isAuthenticated, setIsAuthenticated] = useState(() => {
         const auth = AppStorage.get<boolean>('admin_auth');
@@ -130,21 +140,27 @@ const Admin: React.FC = () => {
             const jbSubjects = jbConfig.subjects || [];
             
             const diffs: { id: string, type: 'missing_in_fb' | 'missing_in_jb' | 'diff' }[] = [];
+            let missingInJbCount = 0;
+            let missingInFbCount = 0;
+            let diffCount = 0;
             
-            // Check for missing/different in JB
+            // Check for missing/different in JB (What's in FB that's not in JB)
             fbSubjects.forEach(fb => {
                 const jb = jbSubjects.find(j => j.id === fb.id || j.slug === fb.slug);
                 if (!jb) {
                     diffs.push({ id: fb.id, type: 'missing_in_jb' });
-                } else if (fb.apiUrl !== jb.apiUrl) {
+                    missingInJbCount++;
+                } else if (fb.apiUrl !== jb.apiUrl || fb.name !== jb.name || fb.slug !== jb.slug) {
                     diffs.push({ id: fb.id, type: 'diff' });
+                    diffCount++;
                 }
             });
 
-            // Check for missing in FB
+            // Check for missing in FB (What's in JB that's not in FB)
             jbSubjects.forEach(jb => {
                 if (!fbSubjects.find(fb => fb.id === jb.id || fb.slug === jb.slug)) {
                     diffs.push({ id: jb.id, type: 'missing_in_fb' });
+                    missingInFbCount++;
                 }
             });
 
@@ -152,7 +168,10 @@ const Admin: React.FC = () => {
             setSyncStatus({
                 status: diffs.length === 0 ? 'synced' : 'out-of-sync',
                 firebaseCount: fbSubjects.length,
-                jsonbinCount: jbSubjects.length
+                jsonbinCount: jbSubjects.length,
+                missingInFbCount,
+                missingInJbCount,
+                diffCount
             });
         } catch (e) {
             setSyncStatus(prev => ({ ...prev, status: 'error' }));
@@ -180,6 +199,7 @@ const Admin: React.FC = () => {
             const finalConfig = { ...updatedConfig, lastUpdated: new Date().toISOString() };
             await API.updateConfig(finalConfig);
             setConfig(finalConfig);
+            checkSync(finalConfig);
             AppStorage.set('website_config', finalConfig);
             setMessage({ text: 'সফলভাবে সেভ করা হয়েছে!', type: 'success' });
             setTimeout(() => setMessage(null), 3000);
@@ -364,65 +384,87 @@ const Admin: React.FC = () => {
                         </h1>
                         <p className="text-slate-500 font-medium">সাবজেক্ট এবং কনফিগারেশন ম্যানেজমেন্ট</p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-4 py-2 rounded-2xl border border-border shadow-sm">
-                            <div className={`w-2 h-2 rounded-full ${
-                                syncStatus.status === 'synced' ? 'bg-emerald-500 animate-pulse' : 
-                                syncStatus.status === 'out-of-sync' ? 'bg-amber-500' : 
-                                syncStatus.status === 'error' ? 'bg-rose-500' : 'bg-slate-300 animate-bounce'
-                            }`} />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                                {syncStatus.status === 'synced' ? 'Synced' : 
-                                 syncStatus.status === 'out-of-sync' ? 'Out of Sync' : 
-                                 syncStatus.status === 'error' ? 'Sync Error' : 'Checking...'}
-                            </span>
+                    <div className="flex flex-col items-end gap-2">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-4 py-2 rounded-2xl border border-border shadow-sm">
+                                <div className={`w-2 h-2 rounded-full ${
+                                    syncStatus.status === 'synced' ? 'bg-emerald-500 animate-pulse' : 
+                                    syncStatus.status === 'out-of-sync' ? 'bg-amber-500' : 
+                                    syncStatus.status === 'error' ? 'bg-rose-500' : 'bg-slate-300 animate-bounce'
+                                }`} />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                    {syncStatus.status === 'synced' ? 'Synced' : 
+                                     syncStatus.status === 'out-of-sync' ? 'Out of Sync' : 
+                                     syncStatus.status === 'error' ? 'Sync Error' : 'Checking...'}
+                                </span>
+                            </div>
+
+                            <button 
+                                onClick={syncToLegacy}
+                                disabled={syncing}
+                                className="p-4 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all"
+                                title="সব ডাটা রি-সিঙ্ক করুন"
+                            >
+                                <RefreshCw size={22} className={syncing ? 'animate-spin' : ''} />
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    if (sortOrder === 'none') setSortOrder('asc');
+                                    else if (sortOrder === 'asc') setSortOrder('desc');
+                                    else setSortOrder('none');
+                                }}
+                                className={`p-4 rounded-2xl transition-all flex items-center gap-2 font-bold ${
+                                    sortOrder !== 'none' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:bg-slate-50'
+                                }`}
+                                title="ক্রমানুসারে সাজান"
+                            >
+                                <ArrowUpDown size={22} />
+                                {sortOrder !== 'none' && (
+                                    <span className="text-[10px] font-black uppercase">{sortOrder === 'asc' ? 'A-Z' : 'Z-A'}</span>
+                                )}
+                            </button>
+
+                            <button 
+                                onClick={handleLogout}
+                                className="p-4 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all"
+                                title="লগআউট করুন"
+                            >
+                                <Lock size={22} />
+                            </button>
+                            <button 
+                                onClick={() => setShowImportDialog(true)}
+                                className="p-4 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-2xl transition-all"
+                                title="পুরাতন সাবজেক্ট ইম্পোর্ট করুন"
+                            >
+                                <RefreshCw size={22} />
+                            </button>
+                            <button 
+                              onClick={() => setShowAddModal(true)}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl flex items-center justify-center gap-2 font-bold shadow-xl shadow-indigo-100 transition-all hover:-translate-y-1"
+                            >
+                              <Plus size={22} /> নতুন সাবজেক্ট
+                            </button>
                         </div>
 
-                        <button 
-                            onClick={syncToLegacy}
-                            disabled={syncing}
-                            className="p-4 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all"
-                            title="সব ডাটা রি-সিঙ্ক করুন"
-                        >
-                            <RefreshCw size={22} className={syncing ? 'animate-spin' : ''} />
-                        </button>
-                        <button 
-                            onClick={() => {
-                                if (sortOrder === 'none') setSortOrder('asc');
-                                else if (sortOrder === 'asc') setSortOrder('desc');
-                                else setSortOrder('none');
-                            }}
-                            className={`p-4 rounded-2xl transition-all flex items-center gap-2 font-bold ${
-                                sortOrder !== 'none' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:bg-slate-50'
-                            }`}
-                            title="ক্রমানুসারে সাজান"
-                        >
-                            <ArrowUpDown size={22} />
-                            {sortOrder !== 'none' && (
-                                <span className="text-[10px] font-black uppercase">{sortOrder === 'asc' ? 'A-Z' : 'Z-A'}</span>
-                            )}
-                        </button>
-
-                        <button 
-                            onClick={handleLogout}
-                            className="p-4 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all"
-                            title="লগআউট করুন"
-                        >
-                            <Lock size={22} />
-                        </button>
-                        <button 
-                            onClick={() => setShowImportDialog(true)}
-                            className="p-4 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-2xl transition-all"
-                            title="পুরাতন সাবজেক্ট ইম্পোর্ট করুন"
-                        >
-                            <RefreshCw size={22} />
-                        </button>
-                        <button 
-                          onClick={() => setShowAddModal(true)}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl flex items-center justify-center gap-2 font-bold shadow-xl shadow-indigo-100 transition-all hover:-translate-y-1"
-                        >
-                          <Plus size={22} /> নতুন সাবজেক্ট
-                        </button>
+                        {syncStatus.status !== 'synced' && syncStatus.status !== 'checking' && (
+                            <div className="flex items-center gap-4 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                                {syncStatus.missingInJbCount > 0 && (
+                                    <span className="flex items-center gap-1 text-amber-600">
+                                        <AlertCircle size={10} /> {syncStatus.missingInJbCount} Missing in JSONBin
+                                    </span>
+                                )}
+                                {syncStatus.missingInFbCount > 0 && (
+                                    <span className="flex items-center gap-1 text-rose-600">
+                                        <AlertCircle size={10} /> {syncStatus.missingInFbCount} Missing in Firebase
+                                    </span>
+                                )}
+                                {syncStatus.diffCount > 0 && (
+                                    <span className="flex items-center gap-1 text-blue-600">
+                                        <Info size={10} /> {syncStatus.diffCount} Mismatched Content
+                                    </span>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 
