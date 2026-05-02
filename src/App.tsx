@@ -27,19 +27,6 @@ const App: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-bg text-text transition-colors duration-500">
-            <header className="fixed top-6 right-6 z-50">
-                <button 
-                  onClick={toggleTheme}
-                  className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all active:scale-90 border-2 ${
-                    theme === 'light' 
-                    ? 'bg-white border-slate-100 text-indigo-600' 
-                    : 'bg-slate-800 border-slate-700 text-amber-400'
-                  }`}
-                >
-                  {theme === 'light' ? <Moon size={24} /> : <Sun size={24} />}
-                </button>
-            </header>
-
             <AnimatePresence mode="wait">
                 <Routes location={location} key={location.pathname}>
                     <Route path="/" element={<Home />} />
@@ -56,6 +43,22 @@ const App: React.FC = () => {
                     title="Refresh"
                   >
                     <RefreshCw size={24} />
+                  </button>
+
+                  <button 
+                    onClick={toggleTheme}
+                    className={`w-14 h-14 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 active:scale-90 transition-all flex items-center justify-center group ${
+                      theme === 'light' 
+                      ? 'bg-white text-indigo-600' 
+                      : 'bg-slate-800 text-amber-400'
+                    }`}
+                    title={theme === 'light' ? 'ডার্ক মোড অন করুন' : 'লাইট মোড অন করুন'}
+                  >
+                    {theme === 'light' ? (
+                      <Moon size={24} className="group-hover:-rotate-12 transition-transform" />
+                    ) : (
+                      <Sun size={24} className="group-hover:rotate-12 transition-transform" />
+                    )}
                   </button>
                 </div>
             )}

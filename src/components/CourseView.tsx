@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { API, AppStorage } from '../lib/api';
 import { WebsiteConfig, Subject, CourseData, CourseSection, CourseContent } from '../types';
-import { ChevronRight, CheckCircle2, Circle, FileText, Youtube, Video, MessageCircle, Clock, AlertCircle, RefreshCw, Settings, WifiOff, Cloud } from 'lucide-react';
+import { ChevronRight, CheckCircle2, Circle, FileText, Youtube, Video, MessageCircle, Clock, AlertCircle, RefreshCw, Settings, WifiOff, Cloud, Search, X } from 'lucide-react';
 import MediaViewer from './MediaViewer';
 import { extractYouTubeVideoId, getVideoDuration } from '../lib/youtube';
 
@@ -47,10 +47,40 @@ interface Props {
 
 const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, isOffline }) => {
     const [activeSectionId, setActiveSectionId] = useState<string | number | null>(data.sections[0]?.id || 2026);
+    const [searchTerm, setSearchTerm] = useState('');
     const [completionMap, setCompletionMap] = useState<Record<string, boolean>>(() => 
         AppStorage.get<Record<string, boolean>>(`completedItems_${subject.apiUrl}`) || {}
     );
     const [activeMedia, setActiveMedia] = useState<{ url: string, type: 'video' | 'pdf' | 'other', title: string } | null>(null);
+
+    // Filtered sections and contents based on search
+    const filteredSections = useMemo(() => {
+        if (!searchTerm.trim()) return data.sections;
+
+        const term = searchTerm.toLowerCase().trim();
+        return data.sections.map(section => {
+            const matchesSection = section.title.toLowerCase().includes(term);
+            const filteredContents = section.contents.filter(item => 
+                item.title.toLowerCase().includes(term)
+            );
+
+            if (matchesSection || filteredContents.length > 0) {
+                return {
+                    ...section,
+                    contents: matchesSection ? section.contents : filteredContents,
+                    isSearchMatch: true
+                };
+            }
+            return null;
+        }).filter(Boolean) as (CourseSection & { isSearchMatch?: boolean })[];
+    }, [data.sections, searchTerm]);
+
+    useEffect(() => {
+        // Auto-expand sections when searching
+        if (searchTerm.trim() && filteredSections.length > 0) {
+            setActiveSectionId(filteredSections[0].id || 0);
+        }
+    }, [searchTerm, filteredSections]);
 
     useEffect(() => {
         AppStorage.set(`completedItems_${subject.apiUrl}`, completionMap);
@@ -162,6 +192,29 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
             </div>
 
             <div className="px-4 py-2">
+                <div className="relative group">
+                    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors">
+                        <Search size={18} />
+                    </div>
+                    <input 
+                        type="text"
+                        placeholder="লেকচার বা নোটের নাম দিয়ে সার্চ করুন..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl py-4 pl-12 pr-12 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition-all shadow-sm"
+                    />
+                    {searchTerm && (
+                        <button 
+                            onClick={() => setSearchTerm('')}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-500 hover:text-rose-500 transition-all"
+                        >
+                            <X size={16} />
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            <div className="px-4 py-2">
                 <div className="bg-card-bg px-5 py-4 rounded-2xl shadow-sm border border-border flex items-center justify-between">
                     <span className="text-[15px] font-bold text-text">সর্বমোট অগ্রগতি</span>
                     <div className="flex-1 px-4">
@@ -178,37 +231,54 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
             </div>
 
             <div className="px-4 py-2 space-y-4 pb-24">
-                {data.sections.map((section, idx) => {
-                    const isExpanded = activeSectionId === (section.id || idx);
-                    const completedInSection = section.contents.filter(c => completionMap[c.id]).length;
-                    
-                    return (
-                        <div key={section.id || idx} className="bg-card-bg rounded-3xl shadow-sm border border-border overflow-hidden transition-all">
-                            <button 
-                                onClick={() => toggleSection(section.id || idx)}
-                                className="w-full px-6 py-5 flex items-center justify-between text-left"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <ChevronRight 
-                                        size={20} 
-                                        className={`text-indigo-600 transition-transform duration-500 ${isExpanded ? 'rotate-90' : ''}`} 
-                                    />
-                                    <h3 className="font-bold text-[16px] text-text leading-tight">
-                                        {section.title}
-                                    </h3>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <div className="w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden hidden xs:block">
-                                        <div 
-                                            className="h-full bg-indigo-200 dark:bg-indigo-900 rounded-full" 
-                                            style={{ width: `${(completedInSection / section.contents.length) * 100}%` }}
+                {filteredSections.length === 0 ? (
+                    <div className="py-12 text-center space-y-4">
+                        <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto text-slate-400">
+                            <Search size={32} />
+                        </div>
+                        <div className="space-y-1">
+                            <h3 className="font-bold text-slate-800 dark:text-white">কোনো ফলাফল পাওয়া যায়নি</h3>
+                            <p className="text-sm text-slate-500">অন্য কোনো নাম দিয়ে চেষ্টা করুন</p>
+                        </div>
+                        <button 
+                            onClick={() => setSearchTerm('')}
+                            className="text-indigo-600 font-bold text-sm"
+                        >
+                            সবগুলো দেখুন
+                        </button>
+                    </div>
+                ) : (
+                    filteredSections.map((section, idx) => {
+                        const isExpanded = activeSectionId === (section.id || idx);
+                        const completedInSection = section.contents.filter(c => completionMap[c.id]).length;
+                        
+                        return (
+                            <div key={section.id || idx} className="bg-card-bg rounded-3xl shadow-sm border border-border overflow-hidden transition-all">
+                                <button 
+                                    onClick={() => toggleSection(section.id || idx)}
+                                    className="w-full px-6 py-5 flex items-center justify-between text-left"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <ChevronRight 
+                                            size={20} 
+                                            className={`text-indigo-600 transition-transform duration-500 ${isExpanded ? 'rotate-90' : ''}`} 
                                         />
+                                        <h3 className="font-bold text-[16px] text-text leading-tight">
+                                            {section.title}
+                                        </h3>
                                     </div>
-                                    <span className="text-xs font-black text-success/80 min-w-[30px] text-right">
-                                        {completedInSection}/{section.contents.length}
-                                    </span>
-                                </div>
-                            </button>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden hidden xs:block">
+                                            <div 
+                                                className="h-full bg-indigo-200 dark:bg-indigo-900 rounded-full" 
+                                                style={{ width: `${(completedInSection / section.contents.length) * 100}%` }}
+                                            />
+                                        </div>
+                                        <span className="text-xs font-black text-success/80 min-w-[30px] text-right">
+                                            {completedInSection}/{section.contents.length}
+                                        </span>
+                                    </div>
+                                </button>
 
                             <AnimatePresence>
                                 {isExpanded && (
@@ -272,7 +342,7 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
                             </AnimatePresence>
                         </div>
                     );
-                })}
+                }))}
             </div>
 
             {activeMedia && (
