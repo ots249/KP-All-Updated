@@ -1,0 +1,8 @@
+{
+	"appId": "com.karigori.pathsala",
+	"appName": "Karigori Pathsala",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https"
+	}
+}
