@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ExternalLink, Download, Play, Pause, Volume2, VolumeX, Maximize2, FileText, Loader2, Youtube, RotateCcw } from 'lucide-react';
+import { X, ExternalLink, Download, Play, Maximize2, FileText, Loader2, Youtube } from 'lucide-react';
 import ReactPlayer from 'react-player';
+import { extractYouTubeVideoId } from '../lib/youtube';
 
 interface Props {
   url: string;
@@ -13,23 +14,6 @@ interface Props {
 const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isReady, setIsReady] = useState(false);
-  
-  const [playing, setPlaying] = useState(false);
-  const [volume, setVolume] = useState(0.8);
-  const [muted, setMuted] = useState(false);
-  const [played, setPlayed] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [seeking, setSeeking] = useState(false);
-  const [showControls, setShowControls] = useState(true);
-  
-  const playerRef = React.useRef<any>(null);
-  const controlsTimeoutRef = React.useRef<any>(null);
-
-  // Initialize playing state after mount to avoid interruption errors on fast unmounts
-  useEffect(() => {
-    setPlaying(true);
-    return () => setPlaying(false);
-  }, []);
 
   // Hardware Back Button Support
   useEffect(() => {
@@ -44,52 +28,22 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
     };
   }, [onClose]);
 
-  // Handle Controls Visibility
-  const handleMouseMove = () => {
-    setShowControls(true);
-    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-    controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 3000);
-  };
-
-  const togglePlay = () => setPlaying(!playing);
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setVolume(parseFloat(e.target.value));
-    setMuted(false);
-  };
-  const toggleMute = () => setMuted(!muted);
-  const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPlayed(parseFloat(e.target.value));
-  };
-  const handleSeekMouseDown = () => setSeeking(true);
-  const handleSeekMouseUp = (e: any) => {
-    setSeeking(false);
-    playerRef.current?.seekTo(parseFloat(e.target.value));
-  };
-  const handleProgress = (state: { played: number }) => {
-    if (!seeking) {
-      setPlayed(state.played);
-      // Fallback for duration if onDuration doesn't fire correctly in some environments
-      if (duration === 0 && playerRef.current) {
-        const d = playerRef.current.getDuration();
-        if (d) setDuration(d);
+  // Loading Timeout - if it takes too long, just show the player
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isLoading) {
+        setIsLoading(false);
+        setIsReady(true);
       }
-    }
-  };
-  const handleDuration = (dur: number) => setDuration(dur);
-
-  const formatTime = (seconds: number) => {
-    if (!seconds || isNaN(seconds)) return '0:00';
-    const date = new Date(seconds * 1000);
-    const hh = date.getUTCHours();
-    const mm = date.getUTCMinutes();
-    const ss = date.getUTCSeconds().toString().padStart(2, '0');
-    if (hh) {
-      return `${hh}:${mm.toString().padStart(2, '0')}:${ss}`;
-    }
-    return `${mm}:${ss}`;
-  };
-
+    }, 8000); // reduced to 8 seconds
+    return () => clearTimeout(timer);
+  }, [isLoading]);
+  
+  // Fix for ReactPlayer in some ESM environments
   const Player = (ReactPlayer as any).default || ReactPlayer;
+
+  const youtubeId = type === 'video' ? extractYouTubeVideoId(url) : null;
+  const youtubeEmbedUrl = youtubeId ? `https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1&enablejsapi=1` : null;
 
   return (
     <AnimatePresence>
@@ -107,7 +61,7 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 30 }}
           className={`relative w-full max-w-6xl h-full md:h-auto md:max-h-[90vh] ${
-            type === 'video' ? 'aspect-video bg-black' : 'aspect-[4/5] md:aspect-auto md:h-[90vh] bg-[#f1f5f9]'
+            type === 'video' ? 'aspect-video bg-black shadow-rose-500/10' : 'aspect-[4/5] md:aspect-auto md:h-[90vh] bg-[#f1f5f9]'
           } md:rounded-[2rem] overflow-hidden shadow-2xl flex flex-col z-10`}
         >
           {/* Header/Toolbar */}
@@ -199,146 +153,41 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
             </AnimatePresence>
 
             {type === 'video' ? (
-              <div 
-                className="w-full h-full relative group bg-black"
-                onMouseMove={handleMouseMove}
-                onClick={togglePlay}
-              >
-                <Player
-                  ref={playerRef}
-                  url={url}
-                  width="100%"
-                  height="100%"
-                  playing={playing}
-                  volume={volume}
-                  muted={muted}
-                  onProgress={handleProgress}
-                  onReady={() => {
-                    setIsReady(true);
-                    setIsLoading(false);
-                    // Explicitly set duration on ready
-                    if (playerRef.current) {
-                      const d = playerRef.current.getDuration();
-                      if (d) setDuration(d);
-                    }
-                  }}
-                  onStart={() => {
-                    setIsLoading(false);
-                  }}
-                  onError={(e: any) => {
-                    console.error('Player Error:', e);
-                    setIsLoading(false);
-                    setIsReady(true); 
-                  }}
-                  config={{
-                    youtube: {
-                      playerVars: { 
-                        modestbranding: 1,
-                        rel: 0,
-                        showinfo: 0,
-                        controls: 0,
-                        disablekb: 1
-                      }
-                    }
-                  }}
-                />
-
-                {/* Custom Controls UI */}
-                <AnimatePresence>
-                  {showControls && isReady && (
-                    <motion.div 
-                      key="controls"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 10 }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-30"
-                    >
-                      {/* Seek Bar */}
-                      <div className="group/seek mb-4 relative h-1.5 md:h-2">
-                        <input
-                          type="range"
-                          min={0}
-                          max={0.999999}
-                          step="any"
-                          value={played}
-                          onMouseDown={handleSeekMouseDown}
-                          onChange={handleSeekChange}
-                          onMouseUp={handleSeekMouseUp}
-                          className="absolute inset-0 w-full opacity-0 z-20 cursor-pointer"
-                        />
-                        <div className="absolute inset-0 bg-white/20 rounded-full overflow-hidden">
-                          <motion.div 
-                            className="h-full bg-indigo-500"
-                            style={{ width: `${played * 100}%` }}
-                          />
-                        </div>
-                        <motion.div 
-                          className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg z-10 pointer-events-none opacity-0 group-hover/seek:opacity-100 transition-opacity"
-                          style={{ left: `${played * 100}%` }}
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-4 md:gap-6">
-                          <button 
-                            onClick={togglePlay}
-                            className="text-white hover:text-indigo-400 transition-colors"
-                          >
-                            {playing ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" />}
-                          </button>
-
-                          <div className="hidden sm:flex items-center gap-3 group/volume">
-                            <button 
-                              onClick={toggleMute}
-                              className="text-white hover:text-indigo-400 transition-colors"
-                            >
-                              {muted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={24} />}
-                            </button>
-                            <input
-                              type="range"
-                              min={0}
-                              max={1}
-                              step="any"
-                              value={volume}
-                              onChange={handleVolumeChange}
-                              className="w-0 group-hover/volume:w-20 transition-all overflow-hidden cursor-pointer h-1.5 bg-white/20 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
-                            />
-                          </div>
-
-                          <div className="text-white/90 text-xs md:text-sm font-bold font-mono">
-                            {formatTime(played * duration)} <span className="text-white/40">/</span> {formatTime(duration)}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                           <button 
-                            onClick={() => playerRef.current?.seekTo(playerRef.current.getCurrentTime() - 10)}
-                            className="text-white/70 hover:text-white transition-colors"
-                            title="10s Back"
-                          >
-                            <RotateCcw size={20} />
-                          </button>
-                          
-                          <button 
-                             onClick={() => {
-                               const container = playerRef.current?.getInternalPlayer()?.parentElement?.parentElement;
-                               if (container?.requestFullscreen) {
-                                 container.requestFullscreen();
-                               } else if ((container as any)?.webkitRequestFullscreen) {
-                                 (container as any).webkitRequestFullscreen();
-                               }
-                             }}
-                             className="text-white/70 hover:text-white transition-colors"
-                             title="Full Screen"
-                          >
-                            <Maximize2 size={20} />
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+              <div className="w-full h-full relative group">
+                {youtubeEmbedUrl ? (
+                   <iframe
+                    src={youtubeEmbedUrl}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    frameBorder="0"
+                    onLoad={() => {
+                      setIsLoading(false);
+                      setIsReady(true);
+                    }}
+                  />
+                ) : (
+                  <Player
+                    url={url}
+                    width="100%"
+                    height="100%"
+                    controls
+                    playing={true}
+                    className="react-player"
+                    onReady={() => {
+                      setIsReady(true);
+                      setIsLoading(false);
+                    }}
+                    onStart={() => {
+                      setIsLoading(false);
+                    }}
+                    onError={(e: any) => {
+                      console.error('Player Error:', e);
+                      setIsLoading(false);
+                      setIsReady(true); 
+                    }}
+                  />
+                )}
               </div>
             ) : type === 'pdf' ? (
               <div className="w-full h-full bg-[#e2e8f0]">
