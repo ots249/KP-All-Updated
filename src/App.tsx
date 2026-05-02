@@ -5,6 +5,7 @@ import { Sun, Moon, RotateCcw, Lock, BookOpen, RefreshCw, Smartphone } from 'luc
 import Home from './pages/Home';
 import Admin from './pages/Admin';
 import InstallPage from './pages/InstallPage';
+import SplashScreen from './components/SplashScreen';
 import { AppStorage } from './lib/api';
 
 const App: React.FC = () => {
@@ -14,11 +15,17 @@ const App: React.FC = () => {
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     });
     const [isStandalone, setIsStandalone] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const navigate = useNavigate();
     const location = useLocation();
 
     useEffect(() => {
         setIsStandalone(window.matchMedia('(display-mode: standalone)').matches);
+        
+        // Initial loading timer
+        const timer = setTimeout(() => {
+            setIsLoading(false);
+        }, 2800); // Allow splash animation to play
         
         // Listen for system theme changes
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -39,13 +46,20 @@ const App: React.FC = () => {
         }
         AppStorage.set('theme', theme);
 
-        return () => mediaQuery.removeEventListener('change', handleChange);
+        return () => {
+            mediaQuery.removeEventListener('change', handleChange);
+            clearTimeout(timer);
+        };
     }, [theme]);
 
     const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
     return (
         <div className="min-h-screen bg-bg text-text transition-colors duration-500">
+            <AnimatePresence>
+                {isLoading && <SplashScreen key="splash" />}
+            </AnimatePresence>
+
             <AnimatePresence mode="wait">
                 <Routes location={location} key={location.pathname}>
                     <Route path="/" element={<Home />} />

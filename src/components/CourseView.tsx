@@ -6,6 +6,7 @@ import { WebsiteConfig, Subject, CourseData, CourseSection, CourseContent } from
 import { ChevronRight, CheckCircle2, Circle, FileText, Youtube, Video, MessageCircle, Clock, AlertCircle, RefreshCw, Settings, WifiOff, Cloud, Search, X, Star } from 'lucide-react';
 import MediaViewer from './MediaViewer';
 import { extractYouTubeVideoId, getVideoDuration } from '../lib/youtube';
+import { checkLiveContent, LiveDetails, isItemNew } from '../lib/liveCheck';
 
 const VideoDuration: React.FC<{ url: string }> = ({ url }) => {
     const [duration, setDuration] = useState<string>('--:--');
@@ -167,6 +168,11 @@ const CourseItem: React.FC<{
                 <div className="flex-1 min-w-0">
                     <div className="text-[15px] font-bold text-slate-800 dark:text-slate-200 leading-snug break-words">
                         {item.title}
+                        {isItemNew(item.available_from || item.resource?.resourceable?.start_time) && (
+                            <span className="ml-2 px-1.5 py-0.5 bg-indigo-600 text-white text-[8px] font-black uppercase rounded-md inline-block align-middle transform -translate-y-0.5">
+                                NEW
+                            </span>
+                        )}
                     </div>
                     {isPDF && (
                         <motion.div 
@@ -208,6 +214,15 @@ const CourseView: React.FC<Props> = ({ data, subject, subjects, syncing, onRetry
         AppStorage.get<Record<string, boolean>>(`favoritesItems_${subject.apiUrl}`) || {}
     );
     const [activeMedia, setActiveMedia] = useState<{ url: string, type: 'video' | 'pdf' | 'other', title: string } | null>(null);
+
+    const [liveContent, setLiveContent] = useState<LiveDetails | null>(() => checkLiveContent(data.sections));
+
+    useEffect(() => {
+        const checkInterval = setInterval(() => {
+            setLiveContent(checkLiveContent(data.sections));
+        }, 60000); // Check every minute
+        return () => clearInterval(checkInterval);
+    }, [data.sections]);
 
     const handleSubjectSwipe = (direction: 'next' | 'prev') => {
         if (!subjects.length) return;
@@ -386,14 +401,21 @@ const CourseView: React.FC<Props> = ({ data, subject, subjects, syncing, onRetry
 
                     <div className="flex flex-col lg:flex-row gap-6 lg:gap-10 items-stretch select-none">
                         <div className="lg:w-1/2 aspect-[16/9] lg:aspect-auto bg-slate-200 dark:bg-slate-800 rounded-[2rem] overflow-hidden shadow-lg relative group">
-                            {data.image?.link && (
+                            {liveContent && extractYouTubeVideoId(liveContent.link) ? (
+                                <iframe 
+                                    src={`https://www.youtube.com/embed/${extractYouTubeVideoId(liveContent.link)}?rel=0&modestbranding=1&controls=1&autoplay=0`}
+                                    className="w-full h-full border-none"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                />
+                            ) : data.image?.link ? (
                                 <img 
                                     src={data.image.link} 
                                     alt="Course Banner" 
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                                     loading="lazy"
                                 />
-                            )}
+                            ) : null}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                             {syncing && (
                                 <div className="absolute top-4 left-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 text-[10px] text-white font-bold uppercase tracking-widest">
@@ -405,6 +427,12 @@ const CourseView: React.FC<Props> = ({ data, subject, subjects, syncing, onRetry
                                 <div className="absolute top-4 right-4 bg-amber-500/90 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 text-[10px] text-white font-bold uppercase tracking-widest shadow-lg">
                                     <WifiOff size={10} />
                                     Offline Mode
+                                </div>
+                            )}
+                            {liveContent && (
+                                <div className="absolute bottom-4 left-4 bg-rose-600 px-3 py-1 rounded-full flex items-center gap-2 text-[10px] text-white font-black uppercase tracking-widest animate-pulse z-30">
+                                    <div className="w-2 h-2 bg-white rounded-full" />
+                                    LIVE CLASS: {liveContent.title}
                                 </div>
                             )}
                         </div>
