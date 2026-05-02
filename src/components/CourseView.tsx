@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, motionValue, useTransform } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { API, AppStorage } from '../lib/api';
 import { WebsiteConfig, Subject, CourseData, CourseSection, CourseContent } from '../types';
@@ -62,6 +62,112 @@ const SkeletonLoader = () => (
         </div>
     </div>
 );
+
+const CourseItem: React.FC<{
+    item: CourseContent;
+    cIdx: number;
+    isDone: boolean;
+    isFavorite: boolean;
+    isPDF: boolean;
+    isYouTube: boolean;
+    link: string;
+    onToggleComplete: () => void;
+    onToggleFavorite: () => void;
+    onClick: () => void;
+    getIcon: (item: CourseContent) => React.ReactNode;
+}> = ({ item, cIdx, isDone, isFavorite, isPDF, isYouTube, link, onToggleComplete, onToggleFavorite, onClick, getIcon }) => {
+    const x = motionValue(0);
+    const favoriteOpacity = useTransform(x, [0, 50], [0, 1]);
+    const completeOpacity = useTransform(x, [0, -50], [0, 1]);
+
+    return (
+        <div className="relative overflow-hidden rounded-2xl group/swipe">
+            {/* Swipe Background Layer */}
+            <div className="absolute inset-0 flex items-center justify-between px-6 pointer-events-none">
+                <motion.div 
+                    style={{ opacity: favoriteOpacity }}
+                    className="flex items-center gap-2 text-amber-500 font-black text-[10px] uppercase tracking-wider"
+                >
+                    <Star size={18} fill="currentColor" />
+                    <span>Favorite</span>
+                </motion.div>
+                <motion.div 
+                    style={{ opacity: completeOpacity }}
+                    className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-wider"
+                >
+                    <span>Complete</span>
+                    <CheckCircle2 size={18} />
+                </motion.div>
+            </div>
+
+            <motion.div 
+                drag="x"
+                style={{ x }}
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.15}
+                onDragEnd={(_, info) => {
+                    const threshold = 100;
+                    if (info.offset.x > threshold) {
+                        onToggleFavorite();
+                    } else if (info.offset.x < -threshold) {
+                        onToggleComplete();
+                    }
+                }}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: cIdx * 0.04, duration: 0.3 }}
+                onClick={onClick}
+                className={`p-4 rounded-2xl border border-border transition-all flex items-center gap-4 cursor-pointer shadow-sm group active:scale-[0.98] relative z-10 ${
+                    isDone 
+                    ? 'bg-slate-50/50 dark:bg-slate-900/50 opacity-60' 
+                    : 'bg-card-bg hover:bg-white dark:hover:bg-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900/40 hover:shadow-md'
+                }`}
+            >
+                <div 
+                    onClick={(e) => { e.stopPropagation(); onToggleComplete(); }}
+                    className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all group-hover:scale-110 ${
+                        isDone ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-600'
+                    }`}
+                >
+                    {isDone && <CheckCircle2 size={16} className="text-white" />}
+                </div>
+                
+                <div className="shrink-0 scale-110">
+                    {getIcon(item)}
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                    <div className="text-[15px] font-bold text-text line-clamp-1">
+                        {item.title}
+                    </div>
+                    {isPDF && (
+                        <motion.div 
+                            animate={{ opacity: [1, 0.5, 1] }}
+                            transition={{ duration: 2, repeat: Infinity }}
+                            className="flex items-center gap-1 mt-0.5 text-[#10b981] text-[9px] font-black uppercase tracking-tighter"
+                        >
+                            <Cloud size={10} fill="currentColor" className="opacity-50" />
+                            <span>Offline Available</span>
+                        </motion.div>
+                    )}
+                </div>
+
+                {isYouTube && (
+                    <VideoDuration url={link} />
+                )}
+
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+                    className={`p-2 transition-all hover:scale-110 active:scale-95 ${
+                        isFavorite ? 'text-amber-500' : 'text-slate-300 dark:text-slate-700 hover:text-amber-300'
+                    }`}
+                >
+                    <Star size={18} fill={isFavorite ? "currentColor" : "none"} />
+                </button>
+            </motion.div>
+        </div>
+    );
+};
 
 const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, isOffline }) => {
     const [activeSectionId, setActiveSectionId] = useState<string | number | null>(data.sections[0]?.id || 2026);
@@ -195,42 +301,59 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
 
     return (
         <div className="flex-1 flex flex-col bg-bg transition-colors duration-300">
-            <div className="relative p-4">
-                <div className="aspect-[16/9] bg-slate-200 dark:bg-slate-800 rounded-[2rem] overflow-hidden shadow-lg relative group">
-                    {data.image?.link && (
-                        <img 
-                            src={data.image.link} 
-                            alt="Course Banner" 
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                        />
-                    )}
-                    {syncing && (
-                        <div className="absolute top-4 left-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 text-[10px] text-white font-bold uppercase tracking-widest">
-                            <RefreshCw size={10} className="animate-spin" />
-                            Syncing
-                        </div>
-                    )}
-                    {isOffline && (
-                        <div className="absolute top-4 right-4 bg-amber-500/90 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 text-[10px] text-white font-bold uppercase tracking-widest shadow-lg">
-                            <WifiOff size={10} />
-                            Offline Mode
-                        </div>
-                    )}
-                </div>
-            </div>
+            <div className="relative p-4 lg:p-0 lg:mb-10">
+                <div className="flex flex-col lg:flex-row gap-6 lg:gap-10 items-stretch">
+                    <div className="lg:w-1/2 aspect-[16/9] lg:aspect-auto bg-slate-200 dark:bg-slate-800 rounded-[2rem] overflow-hidden shadow-lg relative group">
+                        {data.image?.link && (
+                            <img 
+                                src={data.image.link} 
+                                alt="Course Banner" 
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                                loading="lazy"
+                            />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                        {syncing && (
+                            <div className="absolute top-4 left-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 text-[10px] text-white font-bold uppercase tracking-widest">
+                                <RefreshCw size={10} className="animate-spin" />
+                                Syncing
+                            </div>
+                        )}
+                        {isOffline && (
+                            <div className="absolute top-4 right-4 bg-amber-500/90 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 text-[10px] text-white font-bold uppercase tracking-widest shadow-lg">
+                                <WifiOff size={10} />
+                                Offline Mode
+                            </div>
+                        )}
+                    </div>
 
-            <div className="px-4 py-2">
-                <div className="bg-card-bg p-8 rounded-[2rem] shadow-sm border border-border flex flex-col items-center text-center">
-                    <h1 
-                        onClick={handleSecretClick}
-                        className="text-2xl font-black text-indigo-600 dark:text-indigo-400 leading-tight mb-4 select-none cursor-default active:scale-[0.98] transition-all"
-                    >
-                        {data.title}
-                    </h1>
-                    <p className="text-sm text-text-light font-medium flex items-center gap-2">
-                        {data.subtitle || 'ডিপ্লোমা ইন ইঞ্জিনিয়ারিং • ৩য় সেমিস্টার'}
-                    </p>
+                    <div className="lg:w-1/2 flex flex-col justify-center px-4 lg:px-0">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 w-fit">
+                            {data.subtitle || 'ডিপ্লোমা ইন ইঞ্জিনিয়ারিং'}
+                        </div>
+                        <h1 
+                            onClick={handleSecretClick}
+                            className="text-2xl md:text-3xl lg:text-5xl font-black text-slate-800 dark:text-white leading-tight mb-4 select-none cursor-default active:scale-[0.98] transition-all"
+                        >
+                            {data.title}
+                        </h1>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium text-sm md:text-base lg:text-lg max-w-xl">
+                            আপনার শেখার যাত্রাকে আরও সহজ এবং আনন্দদায়ক করতে আমরা নিয়ে এসেছি সেরা সব রিসোর্স। নিয়মিত প্র্যাকটিস করুন এবং আপনার লক্ষ্য পূরণ করুন।
+                        </p>
+                        
+                        <div className="mt-8 flex items-center gap-6">
+                            <div className="flex -space-x-3">
+                                {[1, 2, 3].map(i => (
+                                    <div key={i} className="w-10 h-10 rounded-full border-4 border-white dark:border-slate-900 bg-slate-200 overflow-hidden">
+                                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${i + 123}`} alt="User" />
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-xs font-bold text-slate-400 tracking-wide uppercase">
+                                <span className="text-indigo-600 dark:text-indigo-400">12k+</span> Students Learning
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -284,7 +407,7 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
                 </div>
             </div>
 
-            <div className="px-4 py-2 space-y-4 pb-24">
+            <div className="px-4 py-2 space-y-6 lg:space-y-8 pb-24">
                 {syncing && filteredSections.length === 0 ? (
                     <SkeletonLoader />
                 ) : filteredSections.length === 0 ? (
@@ -304,123 +427,92 @@ const CourseView: React.FC<Props> = ({ data, subject, syncing, onRetry, error, i
                         </button>
                     </div>
                 ) : (
-                    filteredSections.map((section, idx) => {
-                        const isExpanded = activeSectionId === (section.id || idx);
-                        const completedInSection = section.contents.filter(c => completionMap[c.id]).length;
-                        
-                        return (
-                            <motion.div 
-                                key={section.id || idx} 
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: idx * 0.1 }}
-                                className="bg-card-bg rounded-3xl shadow-sm border border-border overflow-hidden transition-all"
-                            >
-                                <button 
-                                    onClick={() => toggleSection(section.id || idx)}
-                                    className="w-full px-6 py-5 flex items-center justify-between text-left group"
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6 items-start">
+                        {filteredSections.map((section, idx) => {
+                            const isExpanded = activeSectionId === (section.id || idx);
+                            const completedInSection = section.contents.filter(c => completionMap[c.id]).length;
+                            
+                            return (
+                                <motion.div 
+                                    key={section.id || idx} 
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ delay: idx * 0.05 }}
+                                    className={`bg-card-bg rounded-3xl shadow-sm border transition-all ${
+                                        isExpanded 
+                                        ? 'border-indigo-600/30 ring-4 ring-indigo-600/5' 
+                                        : 'border-border'
+                                    }`}
                                 >
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isExpanded ? 'bg-indigo-600 text-white rotate-90 shadow-lg shadow-indigo-100' : 'bg-slate-100 dark:bg-slate-800 text-indigo-600'}`}>
-                                            <ChevronRight size={20} />
-                                        </div>
-                                        <h3 className="font-bold text-[16px] text-text leading-tight group-hover:text-indigo-600 transition-colors">
-                                            {section.title}
-                                        </h3>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden hidden xs:block">
-                                            <motion.div 
-                                                initial={{ width: 0 }}
-                                                animate={{ width: `${(completedInSection / section.contents.length) * 100}%` }}
-                                                className="h-full bg-indigo-200 dark:bg-indigo-900 rounded-full" 
-                                            />
-                                        </div>
-                                        <span className="text-xs font-black text-success/80 min-w-[30px] text-right">
-                                            {completedInSection}/{section.contents.length}
-                                        </span>
-                                    </div>
-                                </button>
-
-                            <AnimatePresence>
-                                {isExpanded && (
-                                    <motion.div 
-                                        initial={{ height: 0, opacity: 0 }}
-                                        animate={{ height: 'auto', opacity: 1 }}
-                                        exit={{ height: 0, opacity: 0 }}
-                                        className="overflow-hidden bg-slate-50/30 dark:bg-slate-900/10"
+                                    <button 
+                                        onClick={() => toggleSection(section.id || idx)}
+                                        className="w-full px-6 py-5 flex items-center justify-between text-left group"
                                     >
-                                        <div className="p-4 pt-0 space-y-2">
-                                            {section.contents.map((item, cIdx) => {
-                                                const isDone = completionMap[item.id];
-                                                const link = resolveLink(item);
-                                                const isYouTube = item.type === 'video' || item.title.toLowerCase().includes('video') || link.toLowerCase().includes('youtube') || link.toLowerCase().includes('youtu.be');
-                                                const isPDF = item.type === 'pdf' || item.title.toLowerCase().includes('pdf') || link.toLowerCase().includes('.pdf');
-                                                
-                                                return (
-                                                    <motion.div 
-                                                        key={item.id || cIdx}
-                                                        initial={{ opacity: 0, x: -10 }}
-                                                        animate={{ opacity: 1, x: 0 }}
-                                                        transition={{ delay: cIdx * 0.04, duration: 0.3 }}
-                                                        onClick={() => handleItemClick(item)}
-                                                        className={`p-4 rounded-2xl border border-border transition-all flex items-center gap-4 cursor-pointer shadow-sm group active:scale-[0.98] ${
-                                                            isDone 
-                                                            ? 'bg-slate-50/50 dark:bg-slate-900/50 opacity-60' 
-                                                            : 'bg-card-bg hover:bg-white dark:hover:bg-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900/40 hover:shadow-md'
-                                                        }`}
-                                                    >
-                                                        <div 
-                                                            onClick={(e) => toggleComplete(item.id, e)}
-                                                            className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all group-hover:scale-110 ${
-                                                                isDone ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-600'
-                                                            }`}
-                                                        >
-                                                            {isDone && <CheckCircle2 size={16} className="text-white" />}
-                                                        </div>
-                                                        
-                                                        <div className="shrink-0 scale-110">
-                                                            {getIcon(item)}
-                                                        </div>
-                                                        
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="text-[15px] font-bold text-text line-clamp-1">
-                                                                {item.title}
-                                                            </div>
-                                                            {isPDF && (
-                                                                <motion.div 
-                                                                    animate={{ opacity: [1, 0.5, 1] }}
-                                                                    transition={{ duration: 2, repeat: Infinity }}
-                                                                    className="flex items-center gap-1 mt-0.5 text-[#10b981] text-[9px] font-black uppercase tracking-tighter"
-                                                                >
-                                                                    <Cloud size={10} fill="currentColor" className="opacity-50" />
-                                                                    <span>Offline Available</span>
-                                                                </motion.div>
-                                                            )}
-                                                        </div>
- 
-                                                        {isYouTube && (
-                                                            <VideoDuration url={link} />
-                                                        )}
-
-                                                        <button 
-                                                            onClick={(e) => toggleFavorite(item.id, e)}
-                                                            className={`p-2 transition-all hover:scale-110 active:scale-95 ${
-                                                                favoritesMap[item.id] ? 'text-amber-500' : 'text-slate-300 dark:text-slate-700 hover:text-amber-300'
-                                                            }`}
-                                                        >
-                                                            <Star size={18} fill={favoritesMap[item.id] ? "currentColor" : "none"} />
-                                                        </button>
-                                                    </motion.div>
-                                                );
-                                            })}
+                                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all ${isExpanded ? 'bg-indigo-600 text-white rotate-90 shadow-lg shadow-indigo-100' : 'bg-slate-100 dark:bg-slate-800 text-indigo-600'}`}>
+                                                <ChevronRight size={20} />
+                                            </div>
+                                            <h3 className="font-bold text-[16px] text-text leading-tight group-hover:text-indigo-600 transition-colors line-clamp-2">
+                                                {section.title}
+                                            </h3>
                                         </div>
-                                    </motion.div>
-                                )}
-                                </AnimatePresence>
-                            </motion.div>
-                        );
-                    })
+                                        <div className="flex items-center gap-4 ml-4">
+                                            <div className="w-16 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden hidden sm:block">
+                                                <motion.div 
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${(completedInSection / section.contents.length) * 100}%` }}
+                                                    className="h-full bg-indigo-600 rounded-full" 
+                                                />
+                                            </div>
+                                            <span className="text-xs font-black text-slate-400 min-w-[30px] text-right">
+                                                {completedInSection}/{section.contents.length}
+                                            </span>
+                                        </div>
+                                    </button>
+
+                                    <AnimatePresence>
+                                        {isExpanded && (
+                                            <motion.div 
+                                                initial={{ height: 0, opacity: 0 }}
+                                                animate={{ height: 'auto', opacity: 1 }}
+                                                exit={{ height: 0, opacity: 0 }}
+                                                className="overflow-hidden"
+                                            >
+                                                <div className="p-4 pt-0 space-y-2 border-t border-slate-50 dark:border-slate-800/50 mt-2">
+                                                    <div className="pt-4 space-y-2">
+                                                        {section.contents.map((item, cIdx) => {
+                                                            const isDone = completionMap[item.id];
+                                                            const isFavorite = favoritesMap[item.id];
+                                                            const link = resolveLink(item);
+                                                            const isYouTube = item.type === 'video' || item.title.toLowerCase().includes('video') || link.toLowerCase().includes('youtube') || link.toLowerCase().includes('youtu.be');
+                                                            const isPDF = item.type === 'pdf' || item.title.toLowerCase().includes('pdf') || link.toLowerCase().includes('.pdf');
+                                                            
+                                                            return (
+                                                                <CourseItem 
+                                                                    key={item.id || cIdx}
+                                                                    item={item}
+                                                                    cIdx={cIdx}
+                                                                    isDone={isDone}
+                                                                    isFavorite={isFavorite}
+                                                                    isPDF={isPDF}
+                                                                    isYouTube={isYouTube}
+                                                                    link={link}
+                                                                    onToggleComplete={() => toggleComplete(item.id, { stopPropagation: () => {} } as any)}
+                                                                    onToggleFavorite={() => toggleFavorite(item.id, { stopPropagation: () => {} } as any)}
+                                                                    onClick={() => handleItemClick(item)}
+                                                                    getIcon={getIcon}
+                                                                />
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
                 )}
             </div>
 
