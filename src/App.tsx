@@ -6,6 +6,7 @@ import Home from './pages/Home';
 import Admin from './pages/Admin';
 import InstallPage from './pages/InstallPage';
 import SplashScreen from './components/SplashScreen';
+import TutorialOverlay from './components/TutorialOverlay';
 import { AppStorage } from './lib/api';
 
 const App: React.FC = () => {
@@ -16,6 +17,7 @@ const App: React.FC = () => {
     });
     const [isStandalone, setIsStandalone] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [showTutorial, setShowTutorial] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -25,6 +27,11 @@ const App: React.FC = () => {
         // Initial loading timer
         const timer = setTimeout(() => {
             setIsLoading(false);
+            // After loading, check if tutorial is needed
+            const tutorialCompleted = AppStorage.get<boolean>('tutorial_completed');
+            if (!tutorialCompleted) {
+                setShowTutorial(true);
+            }
         }, 2800); // Allow splash animation to play
         
         // Listen for system theme changes
@@ -58,6 +65,10 @@ const App: React.FC = () => {
         <div className="min-h-screen bg-bg text-text transition-colors duration-500">
             <AnimatePresence>
                 {isLoading && <SplashScreen key="splash" />}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {showTutorial && <TutorialOverlay key="tutorial" onClose={() => setShowTutorial(false)} />}
             </AnimatePresence>
 
             <AnimatePresence mode="wait">
