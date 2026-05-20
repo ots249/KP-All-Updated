@@ -8,6 +8,7 @@ export interface Subject {
 export interface WebsiteConfig {
   subjects: Subject[];
   defaultSubjectId?: string;
+  apiAuthorization?: string;
   lastUpdated?: string;
 }
 
@@ -16,7 +17,9 @@ export interface CourseContent {
   title: string;
   type: 'video' | 'pdf' | 'live' | 'whatsapp' | 'file';
   link?: string;
+  slug?: string;
   available_from?: string;
+  paid?: boolean;
   resource?: {
     link?: string;
     resourceable?: {

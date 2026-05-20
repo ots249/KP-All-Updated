@@ -260,6 +260,7 @@ const Home: React.FC = () => {
                                 onSubjectChange={(slug) => navigate(`/?subject=${slug}`)}
                                 error={dataError instanceof Error ? dataError.message : null}
                                 isOffline={isOffline}
+                                apiAuthorization={config?.apiAuthorization}
                             />
                         </motion.div>
                     ) : dataError ? (

@@ -45,10 +45,38 @@ const Admin: React.FC = () => {
     const [showImportDialog, setShowImportDialog] = useState(false);
     const [importing, setImporting] = useState(false);
 
+    // API Authorization settings state
+    const [authorizationToken, setAuthorizationToken] = useState('');
+    const [isSavingToken, setIsSavingToken] = useState(false);
+
     useEffect(() => {
         const auth = AppStorage.getAdminAuth();
         if (auth) setIsAuthenticated(true);
     }, []);
+
+    useEffect(() => {
+        if (config?.apiAuthorization) {
+            setAuthorizationToken(config.apiAuthorization);
+        }
+    }, [config]);
+
+    const saveAuthorizationToken = async () => {
+        if (!config) return;
+        setIsSavingToken(true);
+        try {
+            await updateConfig.mutateAsync({
+                ...config,
+                apiAuthorization: authorizationToken,
+                lastUpdated: new Date().toISOString()
+            });
+            alert('Authorization Header/Token successfully updated!');
+        } catch (error) {
+            console.error('Failed to update token:', error);
+            alert('Failed to update Authorization Token.');
+        } finally {
+            setIsSavingToken(false);
+        }
+    };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -344,6 +372,55 @@ const Admin: React.FC = () => {
                         <span>Add New Entry</span>
                     </button>
                 </header>
+
+                {/* Global Authorization Settings */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2.5rem] p-8 mb-10 shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl pointer-events-none" />
+                    
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                        <div className="flex-1 space-y-2">
+                            <span className="text-[10px] font-black uppercase text-indigo-600 tracking-widest block font-mono">
+                                API Access Authorization & Header
+                            </span>
+                            <h3 className="text-xl font-black text-slate-800 dark:text-white">
+                                Class API Headers (গ্লোবাল অথরাইজেশন সেটিংস)
+                            </h3>
+                            <p className="text-sm text-slate-500 max-w-2xl leading-relaxed">
+                                ক্লাস এপিআই লিংক (<code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-xs">/api/content/:slug</code>) এ রিকোয়েস্ট পাঠানোর সময় এই Authorization হেডারটি সাথে যোগ করা হবে।
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div className="mt-6 flex flex-col sm:flex-row items-stretch gap-4">
+                        <div className="flex-1 relative">
+                            <input 
+                                type="text" 
+                                value={authorizationToken}
+                                onChange={(e) => setAuthorizationToken(e.target.value)}
+                                placeholder="Bearer Your_API_Token_Here"
+                                className="w-full h-14 pl-5 pr-32 bg-slate-50 dark:bg-slate-950 border-2 border-transparent focus:border-indigo-600 rounded-2xl outline-none text-slate-800 dark:text-white font-bold transition-all text-sm"
+                            />
+                            <button 
+                                type="button"
+                                onClick={() => setAuthorizationToken('Bearer 296210|x4D3lVEZGXurrCsCUTDF5FEiF2Vx8ZwjWEt0sZFRd967237b')}
+                                className="absolute right-3 top-2 bottom-2 px-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center whitespace-nowrap"
+                                title="Use Demo Authorization Token"
+                            >
+                                ডেমো টোকেন নিন
+                            </button>
+                        </div>
+                        
+                        <button 
+                            type="button"
+                            onClick={saveAuthorizationToken}
+                            disabled={isSavingToken}
+                            className="h-14 px-8 bg-indigo-600 text-white font-black rounded-2xl shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 shrink-0"
+                        >
+                            {isSavingToken ? <RefreshCw className="animate-spin" size={18} /> : <Save size={18} />}
+                            সেভ করুন
+                        </button>
+                    </div>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     <AnimatePresence>

@@ -16,17 +16,29 @@ const MediaViewer: React.FC<Props> = ({ url, type, onClose, title }) => {
   const [isReady, setIsReady] = useState(false);
 
   // Hardware Back Button Support
+  const onCloseRef = React.useRef(onClose);
   useEffect(() => {
-    window.history.pushState({ isMediaViewerOpen: true }, '');
-    const handlePopState = () => onClose();
-    window.addEventListener('popstate', handlePopState);
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-      if (window.history.state?.isMediaViewerOpen) {
-        window.history.back();
-      }
-    };
+    onCloseRef.current = onClose;
   }, [onClose]);
+
+  useEffect(() => {
+    const isIframe = window.self !== window.top;
+    if (isIframe) return; // Skip history manipulation inside iframe to avoid preview issues
+
+    try {
+      window.history.pushState({ isMediaViewerOpen: true }, '');
+      const handlePopState = () => onCloseRef.current();
+      window.addEventListener('popstate', handlePopState);
+      return () => {
+        window.removeEventListener('popstate', handlePopState);
+        if (window.history.state?.isMediaViewerOpen) {
+          window.history.back();
+        }
+      };
+    } catch (e) {
+      console.warn('Failed to register hardware back button support inside sandbox:', e);
+    }
+  }, []);
 
   // Loading Timeout - if it takes too long, just show the player
   useEffect(() => {

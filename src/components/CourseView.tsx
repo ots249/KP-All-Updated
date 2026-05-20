@@ -3,7 +3,7 @@ import { motion, AnimatePresence, motionValue, useTransform, animate } from 'mot
 import { useNavigate } from 'react-router-dom';
 import { API, AppStorage } from '../lib/api';
 import { WebsiteConfig, Subject, CourseData, CourseSection, CourseContent } from '../types';
-import { ChevronRight, CheckCircle2, Circle, FileText, Youtube, Video, MessageCircle, Clock, AlertCircle, RefreshCw, Settings, WifiOff, Cloud, Search, X, Star } from 'lucide-react';
+import { ChevronRight, CheckCircle2, Circle, FileText, Youtube, Video, MessageCircle, Clock, AlertCircle, RefreshCw, Settings, WifiOff, Cloud, Search, X, Star, Lock } from 'lucide-react';
 import MediaViewer from './MediaViewer';
 import { extractYouTubeVideoId, getVideoDuration } from '../lib/youtube';
 import { checkLiveContent, LiveDetails, isItemNew } from '../lib/liveCheck';
@@ -52,6 +52,7 @@ interface Props {
   onSubjectChange: (slug: string) => void;
   error: string | null;
   isOffline?: boolean;
+  apiAuthorization?: string;
 }
 
 const SkeletonLoader = () => (
@@ -80,7 +81,9 @@ const CourseItem: React.FC<{
     getIcon: (item: CourseContent) => React.ReactNode;
     searchTerm: string;
     isOffline?: boolean;
-}> = ({ item, cIdx, isDone, isFavorite, isPDF, isYouTube, link, onToggleComplete, onToggleFavorite, onClick, getIcon, searchTerm, isOffline }) => {
+    isLocked?: boolean;
+    isLoading?: boolean;
+}> = ({ item, cIdx, isDone, isFavorite, isPDF, isYouTube, link, onToggleComplete, onToggleFavorite, onClick, getIcon, searchTerm, isOffline, isLocked, isLoading }) => {
     const x = motionValue(0);
 
     const highlightText = (text: string, query: string) => {
@@ -98,6 +101,7 @@ const CourseItem: React.FC<{
 
     const handleDownload = (e: React.MouseEvent, url: string, title: string) => {
         e.stopPropagation();
+        if (isLocked) return;
         if (isOffline) {
             alert('You are currently offline. The file will be available for download once you are back online.');
             return;
@@ -114,7 +118,7 @@ const CourseItem: React.FC<{
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            onClick();
+            if (!isLocked) onClick();
         }
     };
     
@@ -133,38 +137,40 @@ const CourseItem: React.FC<{
     return (
         <div className="relative overflow-hidden rounded-2xl group/swipe bg-slate-100 dark:bg-slate-900/50">
             {/* Swipe Background Layer */}
-            <div className="absolute inset-0 flex items-center justify-between px-8 pointer-events-none" aria-hidden="true">
-                <motion.div 
-                    style={{ 
-                        opacity: favoriteOpacity, 
-                        scale: favoriteScale,
-                        x: favoriteTranslate
-                    }}
-                    className="flex flex-col items-center gap-1 text-amber-500"
-                >
-                    <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center shadow-lg shadow-amber-200/20">
-                        <Star size={24} fill="currentColor" />
-                    </div>
-                    <span className="font-black text-[9px] uppercase tracking-tighter">Favorite</span>
-                </motion.div>
-                
-                <motion.div 
-                    style={{ 
-                        opacity: completeOpacity, 
-                        scale: completeScale,
-                        x: completeTranslate
-                    }}
-                    className="flex flex-col items-center gap-1 text-indigo-600"
-                >
-                    <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center shadow-lg shadow-indigo-200/20">
-                        <CheckCircle2 size={24} />
-                    </div>
-                    <span className="font-black text-[9px] uppercase tracking-tighter">Complete</span>
-                </motion.div>
-            </div>
+            {!isLocked && (
+                <div className="absolute inset-0 flex items-center justify-between px-8 pointer-events-none" aria-hidden="true">
+                    <motion.div 
+                        style={{ 
+                            opacity: favoriteOpacity, 
+                            scale: favoriteScale,
+                            x: favoriteTranslate
+                        }}
+                        className="flex flex-col items-center gap-1 text-amber-500"
+                    >
+                        <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center shadow-lg shadow-amber-200/20">
+                            <Star size={24} fill="currentColor" />
+                        </div>
+                        <span className="font-black text-[9px] uppercase tracking-tighter">Favorite</span>
+                    </motion.div>
+                    
+                    <motion.div 
+                        style={{ 
+                            opacity: completeOpacity, 
+                            scale: completeScale,
+                            x: completeTranslate
+                        }}
+                        className="flex flex-col items-center gap-1 text-indigo-600"
+                    >
+                        <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center shadow-lg shadow-indigo-200/20">
+                            <CheckCircle2 size={24} />
+                        </div>
+                        <span className="font-black text-[9px] uppercase tracking-tighter">Complete</span>
+                    </motion.div>
+                </div>
+            )}
 
             <motion.div 
-                drag="x"
+                drag={!isLocked ? "x" : false}
                 style={{ x, rotate: itemRotate, scale: itemScale }}
                 dragConstraints={{ left: 0, right: 0 }}
                 dragElastic={0.2}
@@ -181,31 +187,56 @@ const CourseItem: React.FC<{
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: cIdx * 0.04, duration: 0.3 }}
                 onClick={(e) => {
+                    if (isLoading) return;
+                    if (isLocked) {
+                        alert('এই ক্লাসটি লক করা আছে। এটি দেখার জন্য আপনাকে কোর্সটি সাবস্ক্রাইব করতে হবে।');
+                        return;
+                    }
                     if (Math.abs(x.get()) < 5) onClick();
                 }}
                 onKeyDown={handleKeyDown}
                 tabIndex={0}
                 role="button"
                 aria-pressed={isDone}
-                aria-label={`${item.title}, ${isDone ? 'completed' : 'uncompleted'}`}
+                aria-label={`${item.title}, ${isDone ? 'completed' : 'uncompleted'}${isLocked ? ', locked' : ''}${isLoading ? ', loading' : ''}`}
                 className={`p-4 rounded-2xl border border-border transition-all flex items-center gap-4 cursor-pointer shadow-sm group active:scale-[0.98] outline-none focus:ring-2 focus:ring-indigo-600 relative z-10 ${
-                    isDone 
+                    isLoading
+                    ? 'bg-slate-50 dark:bg-slate-900 opacity-70 cursor-wait border-indigo-200'
+                    : isLocked
+                    ? 'bg-slate-50 dark:bg-slate-900 opacity-80 border-slate-200 dark:border-slate-800'
+                    : isDone 
                     ? 'bg-slate-50/50 dark:bg-white/5 opacity-60' 
                     : 'bg-card-bg hover:bg-white dark:hover:bg-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900/40 hover:shadow-md'
                 }`}
             >
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onToggleComplete(); }}
-                    aria-label={isDone ? "Mark as incomplete" : "Mark as complete"}
-                    className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all group-hover:scale-110 ${
-                        isDone ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-600'
-                    }`}
-                >
-                    {isDone && <CheckCircle2 size={16} className="text-white" />}
-                </button>
+                {isLoading ? (
+                    <div className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-indigo-600">
+                        <RefreshCw size={14} className="animate-spin" />
+                    </div>
+                ) : isLocked ? (
+                    <div className="shrink-0 w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                        <Lock size={14} />
+                    </div>
+                ) : (
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onToggleComplete(); }}
+                        aria-label={isDone ? "Mark as incomplete" : "Mark as complete"}
+                        className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all group-hover:scale-110 ${
+                            isDone ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-600'
+                        }`}
+                    >
+                        {isDone && <CheckCircle2 size={16} className="text-white" />}
+                    </button>
+                )}
                 
                 <div className="shrink-0 scale-110" aria-hidden="true">
-                    {getIcon(item)}
+                    {isLoading ? (
+                        <RefreshCw size={18} className="animate-spin text-indigo-600" />
+                    ) : isLocked ? (
+                        <Lock size={18} className="text-slate-400" />
+                    ) : (
+                        getIcon(item)
+                    )}
                 </div>
                 
                 <div className="flex-1 min-w-0">
@@ -216,8 +247,13 @@ const CourseItem: React.FC<{
                                 NEW
                             </span>
                         )}
+                        {isLocked && (
+                            <span className="ml-2 px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-500 text-[8px] font-black uppercase rounded-md inline-block align-middle transform -translate-y-0.5">
+                                PAID
+                            </span>
+                        )}
                     </div>
-                    {isPDF && (
+                    {isPDF && !isLocked && (
                         <div className="flex items-center gap-3 mt-1.5">
                             <motion.div 
                                 animate={{ opacity: [1, 0.5, 1] }}
@@ -239,25 +275,27 @@ const CourseItem: React.FC<{
                     )}
                 </div>
 
-                {isYouTube && (
+                {isYouTube && !isLocked && (
                     <VideoDuration url={link} />
                 )}
 
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-                    aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                    className={`p-2 transition-all hover:scale-110 active:scale-95 ${
-                        isFavorite ? 'text-amber-500' : 'text-slate-300 dark:text-slate-700 hover:text-amber-300'
-                    }`}
-                >
-                    <Star size={18} fill={isFavorite ? "currentColor" : "none"} />
-                </button>
+                {!isLocked && (
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+                        aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                        className={`p-2 transition-all hover:scale-110 active:scale-95 ${
+                            isFavorite ? 'text-amber-500' : 'text-slate-300 dark:text-slate-700 hover:text-amber-300'
+                        }`}
+                    >
+                        <Star size={18} fill={isFavorite ? "currentColor" : "none"} />
+                    </button>
+                )}
             </motion.div>
         </div>
     );
 };
 
-const CourseView: React.FC<Props> = ({ data, subject, subjects, syncing, onRetry, onSubjectChange, error, isOffline }) => {
+const CourseView: React.FC<Props> = ({ data, subject, subjects, syncing, onRetry, onSubjectChange, error, isOffline, apiAuthorization }) => {
     const [activeSectionId, setActiveSectionId] = useState<string | number | null>(data.sections[0]?.id || 2026);
     const [searchTerm, setSearchTerm] = useState('');
     const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
@@ -268,6 +306,7 @@ const CourseView: React.FC<Props> = ({ data, subject, subjects, syncing, onRetry
         AppStorage.get<Record<string, boolean>>(`favoritesItems_${subject.apiUrl}`) || {}
     );
     const [activeMedia, setActiveMedia] = useState<{ url: string, type: 'video' | 'pdf' | 'other', title: string } | null>(null);
+    const [loadingItemId, setLoadingItemId] = useState<string | number | null>(null);
 
     const highlightText = (text: string, query: string) => {
         if (!query.trim()) return text;
@@ -384,12 +423,80 @@ const CourseView: React.FC<Props> = ({ data, subject, subjects, syncing, onRetry
         return <FileText size={18} className="text-indigo-600" />;
     };
 
-    const handleItemClick = (item: CourseContent) => {
-        const link = resolveLink(item);
-        if (!link) return;
+    const handleItemClick = async (item: CourseContent) => {
+        let activeLink = '';
+        
+        if (item.slug) {
+            setLoadingItemId(item.id);
+            try {
+                const headers: Record<string, string> = {
+                    'Accept': 'application/json',
+                };
+                if (apiAuthorization) {
+                    headers['Authorization'] = apiAuthorization;
+                }
+                const response = await fetch(`https://api.karigoripathsala.com/api/content/${item.slug}`, {
+                    headers
+                });
+                if (response.ok) {
+                    const resJson = await response.json();
+                    
+                    // Parse link with extremely robust fallback property checks
+                    let dynamicLink = '';
+                    if (resJson) {
+                        if (typeof resJson === 'string') {
+                            dynamicLink = resJson;
+                        } else if (resJson.data) {
+                            const d = resJson.data;
+                            if (typeof d === 'string') {
+                                dynamicLink = d;
+                            } else if (d.video && d.video.link) {
+                                dynamicLink = d.video.link;
+                            } else if (d.video && d.video.url) {
+                                dynamicLink = d.video.url;
+                            } else if (d.link) {
+                                dynamicLink = d.link;
+                            } else if (d.url) {
+                                dynamicLink = d.url;
+                            } else if (d.resource && d.resource.link) {
+                                dynamicLink = d.resource.link;
+                            } else if (d.resource && d.resource.resourceable && d.resource.resourceable.link) {
+                                dynamicLink = d.resource.resourceable.link;
+                            }
+                        } else if (resJson.video) {
+                            if (resJson.video.link) dynamicLink = resJson.video.link;
+                            else if (resJson.video.url) dynamicLink = resJson.video.url;
+                        } else if (resJson.link) {
+                            dynamicLink = resJson.link;
+                        } else if (resJson.url) {
+                            dynamicLink = resJson.url;
+                        } else if (resJson.resource) {
+                            if (resJson.resource.link) dynamicLink = resJson.resource.link;
+                            else if (resJson.resource.resourceable && resJson.resource.resourceable.link) {
+                                dynamicLink = resJson.resource.resourceable.link;
+                            }
+                        }
+                    }
+                    if (dynamicLink) {
+                        activeLink = dynamicLink;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to resolve dynamic course content URL for:', item.slug, error);
+            } finally {
+                setLoadingItemId(null);
+            }
+        }
+
+        // Fall back to resolved static link if dynamic fetching yielded nothing
+        if (!activeLink) {
+            activeLink = resolveLink(item);
+        }
+
+        if (!activeLink) return;
 
         const title = item.title.toLowerCase();
-        const url = link.toLowerCase();
+        const url = activeLink.toLowerCase();
         
         let type: 'video' | 'pdf' | 'other' = 'other';
         if (item.type === 'video' || title.includes('video') || url.includes('youtube') || url.includes('youtu.be')) {
@@ -399,9 +506,9 @@ const CourseView: React.FC<Props> = ({ data, subject, subjects, syncing, onRetry
         }
 
         if (type !== 'other') {
-            setActiveMedia({ url: link, type, title: item.title });
+            setActiveMedia({ url: activeLink, type, title: item.title });
         } else {
-            window.open(link, '_blank');
+            window.open(activeLink, '_blank');
         }
     };
 
@@ -677,6 +784,8 @@ const CourseView: React.FC<Props> = ({ data, subject, subjects, syncing, onRetry
                                                                     link={link}
                                                                     searchTerm={searchTerm}
                                                                     isOffline={isOffline}
+                                                                    isLocked={false}
+                                                                    isLoading={loadingItemId === item.id}
                                                                     onToggleComplete={() => toggleComplete(item.id, { stopPropagation: () => {} } as any)}
                                                                     onToggleFavorite={() => toggleFavorite(item.id, { stopPropagation: () => {} } as any)}
                                                                     onClick={() => handleItemClick(item)}
